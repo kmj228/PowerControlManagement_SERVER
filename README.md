@@ -52,8 +52,7 @@ node server.js
 │   ├── app.js          # 프론트엔드 로직
 │   ├── package.json
 │   └── data/           # 런타임 생성 (Git 제외)
-└── dist/               # 빌드 결과물 (Git 제외)
-    └── DeviceManager.exe
+└── dist/
 ```
 
 ## 기본 포트
