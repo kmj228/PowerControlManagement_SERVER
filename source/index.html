@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전원 제어 장치</title>
+<link rel="icon" href="logo_ci.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+  :root {
+    --bg:#f4f6f9; --bg2:#ffffff; --bg3:#f0f2f5; --border:#d0d7de; --border2:#e0e4ea;
+    --text:#1a1f2e; --text2:#6b7280; --text3:#9ca3af;
+    --green:#16a34a; --green-bg:#dcfce7; --red:#dc2626; --red-bg:#fee2e2;
+    --yellow:#d97706; --yellow-bg:#fef3c7; --blue:#2563eb; --blue-bg:#dbeafe;
+    --blue-dark:#1d4ed8; --purple:#7c3aed; --purple-bg:#ede9fe; --gray-bg:#f3f4f6;
+    --shadow:0 1px 3px rgba(0,0,0,.08); --shadow-md:0 4px 12px rgba(0,0,0,.1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+  header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:var(--shadow);z-index:10;}
+  .header-left{display:flex;align-items:center;gap:10px;}
+  .header-logo{width:26px;height:26px;object-fit:contain;}
+  header h1{font-size:14px;font-weight:700;}
+  .header-right{display:flex;align-items:center;gap:16px;}
+  .port-wrap{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);}
+  .port-wrap input{width:64px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 7px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;}
+  .ws-badge{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);padding:3px 9px;border-radius:20px;}
+  /* DB 상태 배지 */
+  .db-badge{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);padding:3px 9px;border-radius:20px;cursor:default;transition:border-color .2s,color .2s;}
+  .db-badge.db-ok{border-color:var(--green);color:var(--green);background:var(--green-bg);}
+  .db-badge.db-err{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .db-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s;}
+  .db-badge.db-ok .db-dot{background:var(--green);}
+  .db-badge.db-err .db-dot{background:var(--red);}
+  /* DB 설정 모달 */
+  .db-modal{width:420px;max-width:calc(100vw - 24px);}
+  .db-conn-result{margin-top:14px;padding:10px 14px;border-radius:8px;font-size:13px;display:none;}
+  .db-conn-result.ok{background:var(--green-bg);border:1px solid var(--green);color:var(--green);display:block;}
+  .db-conn-result.err{background:var(--red-bg);border:1px solid var(--red);color:var(--red);display:block;}
+  .btn-port{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-port:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--red);transition:background .3s;}
+  .ws-dot.on{background:var(--green);}
+  .body-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .two-col{flex:1;display:grid;grid-template-columns:clamp(300px,380px,460px) 1fr;overflow:hidden;min-height:420px;}
+
+  /* ── 제어 패널 ── */
+  .ctrl-panel{background:var(--bg2);display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:100px;border-bottom:1px solid var(--border);}
+  .ctrl-header{padding:14px 18px 12px;border-bottom:1px solid var(--border2);flex-shrink:0;}
+  .ctrl-header-top{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+  .ctrl-link-led{width:9px;height:9px;border-radius:50%;border:1px solid var(--border);flex-shrink:0;transition:all .3s;}
+  .ctrl-link-led.ok{background:var(--green);box-shadow:0 0 5px rgba(22,163,74,.5);border-color:var(--green);}
+  .ctrl-link-led.timeout{background:var(--yellow);border-color:var(--yellow);}
+  .ctrl-link-led.disconnected{background:var(--red);border-color:var(--red);}
+  .ctrl-link-led.never{background:var(--yellow);border-color:var(--yellow);}
+  .ctrl-link-text{font-size:11px;}
+  .ctrl-link-text.ok{color:var(--green);}
+  .ctrl-link-text.timeout{color:var(--yellow);}
+  .ctrl-link-text.disconnected{color:var(--red);}
+  .ctrl-link-text.never{color:var(--yellow);}
+  .ctrl-name{font-size:16px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ctrl-device-id{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);margin-bottom:2px;}
+  .ctrl-address{font-size:12px;color:var(--text2);margin-bottom:2px;}
+  .ctrl-meta{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+  .ctrl-body{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  .ctrl-ch-list{flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+  .ctrl-bulk-bar{padding:5px 12px;border-bottom:1px solid var(--border2);flex-shrink:0;background:var(--bg3);display:flex;align-items:center;gap:5px;}
+  .bulk-bar-label{font-size:11px;font-weight:600;color:var(--text3);white-space:nowrap;margin-right:2px;}
+  .btn-bulk{flex:1;padding:3px 0;border-radius:4px;font-size:11px;border:1px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .12s;text-align:center;}
+  .btn-bulk:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-bulk-on{background:var(--green-bg);border-color:var(--green);color:var(--green);}
+  .btn-bulk-on:hover:not(:disabled){background:var(--green);color:#fff;}
+  .btn-bulk-off{background:var(--red-bg);border-color:var(--red);color:var(--red);}
+  .btn-bulk-off:hover:not(:disabled){background:var(--red);color:#fff;}
+  .btn-bulk-rst{background:var(--yellow-bg);border-color:var(--yellow);color:var(--yellow);}
+  .btn-bulk-rst:hover:not(:disabled){background:var(--yellow);color:#fff;}
+  .ch-row{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;box-shadow:var(--shadow);}
+  .ch-top{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .ch-label{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--text2);width:34px;}
+  .ch-status-badge{font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;width:50px;text-align:center;}
+  .ch-status-badge.on{background:var(--green-bg);color:var(--green);}
+  .ch-status-badge.off{background:var(--red-bg);color:var(--red);}
+  .ch-status-badge.unknown{background:var(--gray-bg);color:var(--text3);}
+  .ch-btns{display:flex;gap:4px;margin-left:auto;}
+  .ch-current{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);}
+  .btn{padding:4px 9px;border-radius:5px;border:1px solid var(--border);font-size:11px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .12s;background:var(--bg2);color:var(--text);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-on{border-color:var(--green);color:var(--green);background:var(--green-bg);}
+  .btn-on:hover:not(:disabled){background:var(--green);color:#fff;}
+  .btn-off{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .btn-off:hover:not(:disabled){background:var(--red);color:#fff;}
+  .btn-rst{border-color:var(--yellow);color:var(--yellow);background:var(--yellow-bg);}
+  .btn-rst:hover:not(:disabled){background:var(--yellow);color:#fff;}
+  .ctrl-empty{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--text3);font-size:13px;}
+  .ctrl-empty svg{opacity:.25;}
+
+  /* ── 장비 목록 ── */
+  .left-col{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);min-width:0;}
+  .right-col{display:flex;flex-direction:column;overflow:hidden;border-left:1px solid var(--border);}
+  .list-panel{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);flex:1;min-height:0;}
+  .list-toolbar{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;background:var(--bg2);flex-shrink:0;box-shadow:var(--shadow);}
+  .list-toolbar span{font-size:13px;font-weight:600;flex:1;}
+  .btn-icon{height:30px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;display:flex;align-items:center;font-size:12px;font-weight:500;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-icon:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .btn-icon.danger:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .device-list{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .device-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .12s;box-shadow:var(--shadow);}
+  .device-card:hover{border-color:#b0b8c4;box-shadow:var(--shadow-md);}
+  .device-card.selected{border-color:var(--blue);background:#f0f5ff;}
+  .card-layout{display:flex;align-items:center;gap:10px;}
+  .card-left{flex:0 0 150px;min-width:0;}
+  .card-right{flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;}
+  .card-top{display:flex;align-items:center;gap:7px;margin-bottom:3px;}
+  .card-led{width:9px;height:9px;border-radius:50%;border:1px solid var(--border);transition:all .3s;flex-shrink:0;}
+  .card-led.ok{background:var(--green);box-shadow:0 0 4px rgba(22,163,74,.4);border-color:var(--green);}
+  .card-led.timeout{background:var(--yellow);border-color:var(--yellow);}
+  .card-led.disconnected{background:var(--red);border-color:var(--red);}
+  .card-led.never{background:var(--yellow);border-color:var(--yellow);}
+  .card-info{min-width:0;flex:1;}
+  .card-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .card-id{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);}
+  .card-meta{font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+  .card-multitap{width:100%;max-width:500px;}
+  .card-multitap svg{width:100%;height:auto;max-height:110px;display:block;}
+
+  /* ── 알림 패널 ── */
+  .alarm-panel{display:flex;flex-direction:column;overflow:hidden;background:var(--bg2);height:210px;flex-shrink:0;}
+  .alarm-resize{height:5px;background:var(--border2);cursor:row-resize;flex-shrink:0;transition:background .15s;display:flex;align-items:center;justify-content:center;border-top:1px solid var(--border);}
+  .alarm-resize:hover,.alarm-resize.dragging{background:var(--blue);}
+  .alarm-resize::after{content:'';width:32px;height:2px;background:var(--text3);border-radius:2px;opacity:.5;}
+  .alarm-resize:hover::after,.alarm-resize.dragging::after{opacity:1;background:#fff;}
+  .alarm-header{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0;background:var(--bg2);box-shadow:var(--shadow);}
+  .alarm-title{font-size:13px;font-weight:600;flex:1;}
+  .alarm-badge{font-size:10px;font-family:'JetBrains Mono',monospace;background:var(--red-bg);border:1px solid var(--red);color:var(--red);padding:1px 7px;border-radius:10px;display:none;}
+  .alarm-badge.show{display:inline-flex;}
+  .btn-alarm-clear{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-alarm-clear:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .alarm-list{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}
+  .alarm-empty{padding:30px 16px;text-align:center;color:var(--text3);font-size:12px;}
+  .alarm-item{border-radius:8px;padding:9px 12px;border:1px solid var(--border2);display:flex;align-items:flex-start;gap:8px;}
+  .alarm-item.connect{border-color:#bbf7d0;background:#f0fdf4;}
+  .alarm-item.disconnect{border-color:#fecaca;background:#fff5f5;}
+  .alarm-item.timeout{border-color:#fde68a;background:#fffbeb;}
+
+  .alarm-content{flex:1;min-width:0;}
+  .alarm-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 4px;line-height:1;flex-shrink:0;transition:color .12s;margin-left:auto;align-self:flex-start;}
+  .alarm-del:hover{color:var(--red);}
+  .alarm-msg{font-size:12px;font-weight:600;margin-bottom:2px;}
+  .alarm-item.connect .alarm-msg{color:var(--green);}
+  .alarm-item.disconnect .alarm-msg{color:var(--red);}
+  .alarm-item.timeout .alarm-msg{color:var(--yellow);}
+  .alarm-sub{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .alarm-time{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:3px;}
+
+  /* ── 리사이즈 ── */
+  .resize-handle{height:5px;background:var(--border2);cursor:row-resize;flex-shrink:0;transition:background .15s;display:flex;align-items:center;justify-content:center;}
+  .resize-handle:hover,.resize-handle.dragging{background:var(--blue);}
+  .resize-handle::after{content:'';width:32px;height:2px;background:var(--text3);border-radius:2px;opacity:.5;transition:opacity .15s;}
+  .resize-handle:hover::after,.resize-handle.dragging::after{opacity:1;background:#fff;}
+
+  /* ── 로그 ── */
+  .log-section{flex-shrink:0;background:var(--bg2);display:flex;flex-direction:column;overflow:hidden;min-height:80px;max-height:55vh;}
+  .log-header{padding:7px 14px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .log-title{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.3px;text-transform:uppercase;}
+  .log-count{font-size:10px;font-family:'JetBrains Mono',monospace;background:var(--bg3);border:1px solid var(--border);color:var(--text3);padding:1px 7px;border-radius:10px;}
+  .log-filters{display:flex;gap:4px;margin-left:4px;}
+  .log-filter-btn{font-size:11px;font-weight:500;padding:2px 9px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .1s;user-select:none;}
+  .log-filter-btn.send.active{background:var(--blue-bg);border-color:var(--blue);color:var(--blue);font-weight:600;}
+  .log-filter-btn.ack.active{background:var(--purple-bg);border-color:var(--purple);color:var(--purple);font-weight:600;}
+  .log-filter-btn.status.active{background:var(--green-bg);border-color:var(--green);color:var(--green);font-weight:600;}
+  .log-filter-btn.conn.active{background:#dcfce7;border-color:#16a34a;color:#16a34a;font-weight:600;}
+  .log-filter-btn.disc.active{background:#fee2e2;border-color:#dc2626;color:#dc2626;font-weight:600;}
+  .log-filter-btn.to.active{background:#fef3c7;border-color:#d97706;color:#d97706;font-weight:600;}
+  .log-filter-sep{width:1px;height:16px;background:var(--border);margin:0 2px;align-self:center;}
+  .log-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+  .log-col-header{display:grid;grid-template-columns:118px 118px 78px 110px 1fr 22px;padding:5px 14px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.4px;text-transform:uppercase;border-bottom:1px solid var(--border2);flex-shrink:0;background:var(--bg3);position:sticky;top:0;z-index:1;}
+  .log-row{display:grid;grid-template-columns:118px 118px 78px 110px 1fr 22px;align-items:center;padding:5px 14px;font-size:11px;border-bottom:1px solid var(--border2);transition:background .08s;cursor:pointer;}
+  .log-row:hover{background:var(--bg3);}
+  .log-row.row-connect{background:#f0fdf4;}
+  .log-row.row-connect:hover{background:#dcfce7;}
+  .log-row.row-disconnect{background:#fff5f5;}
+  .log-row.row-disconnect:hover{background:#fee2e2;}
+  .log-row.row-timeout{background:#fffbeb;}
+  .log-row.row-timeout:hover{background:#fef3c7;}
+  .log-row:last-child{border-bottom:none;}
+  .log-num{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);}
+  .log-time{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap;}
+  .log-name{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .log-devid{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .log-type-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;white-space:nowrap;letter-spacing:.2px;}
+  .log-type-pill.tp-on,.log-type-pill.tp-off,.log-type-pill.tp-rst{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;}
+  .log-type-pill.tp-st {background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+  .log-type-pill.tp-ack{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;}
+  .log-type-pill.tp-to {background:#fef3c7;color:#d97706;border:1px solid #fcd34d;}
+  .log-type-pill.tp-fw   {background:#f3f4f6;color:#374151;border:1px solid #d1d5db;}
+  .log-type-pill.tp-conn {background:#dcfce7;color:#15803d;border:1px solid #86efac;}
+  .log-type-pill.tp-disc {background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;}
+  .log-summary{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .log-dot{display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:14px;line-height:1;letter-spacing:-1px;transition:color .12s;}
+  .log-row:hover .log-dot{color:var(--blue);}
+  .log-empty{padding:24px;text-align:center;color:var(--text3);font-size:12px;}
+  .log-action-btn{height:24px;padding:0 9px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;white-space:nowrap;}
+  .log-action-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .log-action-btn.danger:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .log-action-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none;}
+  .log-keep-note{font-size:10px;color:var(--text3);margin-left:auto;white-space:nowrap;}
+  /* 로그 필터 */
+  .log-filter-bar{display:flex;flex-direction:column;gap:0;border-bottom:1px solid var(--border2);background:var(--bg3);flex-shrink:0;}
+  .log-filter-row{display:flex;align-items:center;gap:6px;padding:5px 14px;flex-wrap:wrap;}
+  .log-filter-row:first-child{border-bottom:1px solid var(--border2);}
+  .log-filter-bar input,.log-filter-bar select{height:26px;padding:0 8px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);color:var(--text);font-size:12px;font-family:inherit;outline:none;}
+  .log-filter-bar input:focus,.log-filter-bar select:focus{border-color:var(--blue);}
+  .log-filter-bar input::placeholder{color:var(--text3);}
+  .log-filter-bar select option[value=""]{color:var(--text3);}
+  .log-filter-bar select.placeholder-active{color:var(--text3);}
+  .log-filter-date{width:148px;min-width:148px;}
+  /* 날짜 선택 커스텀 라벨 */
+  .ls-date-wrap{position:relative;display:inline-block;}
+  .ls-date-wrap .log-filter-date{width:148px;}
+  .ls-date-label{
+    position:absolute;inset:0;display:flex;align-items:center;
+    padding:0 9px;font-size:12px;color:var(--text3);
+    pointer-events:none;border-radius:6px;
+    background:var(--bg2);border:1px solid var(--border);
+    transition:opacity .1s;
+  }
+  .ls-date-wrap:focus-within .ls-date-label,
+  .ls-date-label.has-value{opacity:0;}
+  .log-filter-search{flex:1;min-width:80px;}
+  .log-filter-id{width:76px;font-family:'JetBrains Mono',monospace;}
+  .log-filter-user{width:86px;}
+  .log-filter-dir{width:96px;}
+  .log-filter-label{font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0;}
+  .log-filter-sep{font-size:11px;color:var(--text3);}
+  .btn-log-filter{height:26px;padding:0 12px;border-radius:5px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
+  .btn-log-reset{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;}
+  .btn-log-reset:hover{border-color:var(--red);color:var(--red);}
+  /* 로그 검색 모달 */
+  .log-search-modal{background:var(--bg2);border-radius:12px;width:90vw;max-width:1100px;height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-md);}
+  .log-search-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0;}
+  .log-search-title{font-size:15px;font-weight:700;}
+  .log-search-filters{background:var(--bg3);border-bottom:1px solid var(--border2);flex-shrink:0;padding:12px 18px;}
+  .log-search-body{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+  /* 필터 그리드 */
+  .ls-filter-rows{display:flex;flex-direction:column;gap:8px;}
+  .ls-filter-row1{display:flex;align-items:flex-end;gap:8px;}
+  .ls-filter-row2{display:flex;align-items:flex-end;gap:8px;}
+  .ls-filter-item{display:flex;flex-direction:column;gap:4px;min-width:0;}
+  .ls-filter-wide{flex:1;min-width:160px;}
+  .ls-label{font-size:11px;font-weight:600;color:var(--text2);}
+  .ls-input{height:30px;padding:0 9px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-family:inherit;outline:none;width:100%;}
+  .ls-input:focus{border-color:var(--blue);}
+  .ls-input::placeholder{color:var(--text3);}
+  select.ls-input{cursor:pointer;}
+  select.ls-input.placeholder-active{color:var(--text3);}
+  .ls-filter-item .date-input-wrap{width:130px;}
+  .ls-filter-item .date-input-wrap .ls-input{width:130px;}
+  .ls-filter-actions{display:flex;align-items:flex-end;gap:6px;margin-left:auto;}
+
+  /* 로그 페이저 */
+  .log-pager{display:flex;align-items:center;justify-content:center;gap:4px;padding:6px;flex-shrink:0;border-top:1px solid var(--border2);}
+  .log-page-btn{height:26px;min-width:26px;padding:0 6px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;font-family:'JetBrains Mono',monospace;}
+  .log-page-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .log-page-btn.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+  .log-page-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .log-total-note{font-size:11px;color:var(--text3);margin-left:4px;}
+
+  /* ── 모달 공통 ── */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:200;align-items:center;justify-content:center;}
+  .modal-bg.show{display:flex;}
+  .modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:26px;width:380px;box-shadow:var(--shadow-md);}
+  .modal h3{font-size:15px;font-weight:700;margin-bottom:20px;}
+  .form-row{margin-bottom:14px;}
+  .form-row label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;}
+  .required{color:var(--red);}
+  .form-row input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:13px;font-family:inherit;transition:border-color .12s;}
+  .form-row input:focus{outline:none;border-color:var(--blue);background:#fff;}
+  .modal-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:22px;}
+  .btn-primary{padding:8px 20px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;}
+  .btn-primary:hover{background:var(--blue-dark);}
+  .btn-cancel{padding:8px 20px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+  .btn-cancel:hover{background:var(--border2);}
+  /* 커스텀 alert */
+  .alert-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;width:340px;box-shadow:var(--shadow-md);text-align:center;}
+  .alert-icon-wrap{font-size:28px;margin-bottom:10px;}
+  .alert-msg{font-size:14px;font-weight:500;margin-bottom:20px;line-height:1.6;color:var(--text);}
+  .alert-btns{display:flex;justify-content:center;gap:8px;}
+  .btn-alert-ok{padding:8px 28px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;}
+  .btn-alert-ok:hover{background:var(--blue-dark);}
+  .btn-alert-ok.danger{background:var(--red);}
+  .btn-alert-ok.danger:hover{background:#b91c1c;}
+  .btn-alert-cancel{padding:8px 20px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+  /* 상세 보기 */
+  .detail-modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:520px;max-width:95vw;box-shadow:var(--shadow-md);overflow:hidden;max-height:90vh;display:flex;flex-direction:column;}
+  #detailModal{z-index:400;}
+  .detail-header{padding:14px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .detail-title{font-size:14px;font-weight:700;}
+  .detail-close{width:26px;height:26px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .12s;}
+  .detail-close:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .detail-body{padding:18px 20px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+  .detail-row{display:grid;grid-template-columns:90px 1fr;align-items:start;gap:8px;}
+  .detail-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;padding-top:2px;}
+  .detail-value{font-size:13px;color:var(--text);}
+  .detail-value.mono{font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .detail-channels{display:flex;gap:5px;flex-wrap:wrap;}
+  .detail-ch{padding:3px 10px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;border:1px solid var(--border);}
+  .detail-ch.on{background:var(--green-bg);color:var(--green);border-color:var(--green);}
+  .detail-ch.off{background:var(--red-bg);color:var(--red);border-color:var(--red);}
+  /* RAW HEX */
+  .hex-clean{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;display:flex;flex-direction:column;gap:10px;}
+  .hex-row{display:grid;grid-template-columns:64px 1fr;gap:8px;align-items:start;}
+  .hex-row+.hex-row{border-top:1px solid var(--border2);padding-top:10px;}
+  .hex-lbl{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding-top:5px;}
+  .hex-lbl.hdr{color:#1d4ed8;} .hex-lbl.cmd{color:#15803d;} .hex-lbl.dat{color:#92400e;} .hex-lbl.cs{color:#6d28d9;}
+  .hex-val{display:flex;flex-direction:column;gap:4px;}
+  .hex-bgroup{display:flex;flex-wrap:wrap;gap:4px;}
+  .hex-b{padding:3px 7px;border-radius:4px;font-size:12px;line-height:1.4;}
+  .hex-b.hdr{background:#dbeafe;color:#1d4ed8;} .hex-b.cmd{background:#dcfce7;color:#15803d;}
+  .hex-b.dat{background:#fef3c7;color:#92400e;} .hex-b.cs{background:#ede9fe;color:#6d28d9;}
+  .hex-b.ext{background:#cffafe;color:#0e7490;}
+  .hex-lbl.ext{color:#0e7490;}
+  .hex-desc{font-size:10px;color:var(--text3);font-family:'Noto Sans KR',sans-serif;line-height:1.4;}
+  @keyframes chPulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  @keyframes svgPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+  .svg-pending{animation:svgPulse .75s ease-in-out infinite;}
+  .ch-status-badge.pending-blink{animation:chPulse .75s ease-in-out infinite;}
+
+  /* ── 텍스트 축약 시스템 ──────────────────────────────────────
+     abbr-l  : 기본(전체) 텍스트 — 900px 초과에서 표시
+     abbr-ms : 중소형 공통 약어  — 900px 이하 전체에서 표시
+     abbr-m  : 중형 전용 약어   — 560~900px 에서 표시
+     abbr-s  : 소형 전용 약어   — 560px 이하에서 표시
+     각 span은 클래스 하나만 가짐 → 충돌 없음
+  ── */
+  .abbr-l  { display: inline; }
+  .abbr-ms { display: none; }
+  .abbr-m  { display: none; }
+  .abbr-s  { display: none; }
+
+  @media (max-width: 900px) {
+    .abbr-l  { display: none;   }
+    .abbr-ms { display: inline; }
+    .abbr-m  { display: inline; }
+    .abbr-s  { display: none;   }
+  }
+  @media (max-width: 560px) {
+    .abbr-l  { display: none;   }
+    .abbr-ms { display: inline; }
+    .abbr-m  { display: none;   }
+    .abbr-s  { display: inline; }
+  }
+
+  /* ── 반응형 ── */
+
+  /* 1200px: 패딩·간격 소폭 압축 */
+  @media (max-width: 1200px) {
+    .two-col { grid-template-columns: clamp(320px, 36%, 440px) 1fr; }
+    .log-keep-note { display: none; }
+    .header-right { gap: 12px; }
+  }
+
+  /* 1000px: 좌측 패널 압축, 헤더 요소 축소 */
+  @media (max-width: 1000px) {
+    .two-col { grid-template-columns: clamp(290px, 34%, 380px) 1fr; }
+    .ctrl-name { font-size: 14px; }
+    .ctrl-header { padding: 10px 14px 8px; }
+    .header-right { gap: 10px; }
+    .log-action-btn.csv-btn { display: none; }
+  }
+
+  /* 900px: 텍스트 축약 시작, 레이아웃 압축 */
+  @media (max-width: 900px) {
+    .two-col { grid-template-columns: clamp(270px, 32%, 340px) 1fr; }
+    .log-title-prefix { display: none; }
+    .col-name { display: none; }
+    .log-col-header, .log-row { grid-template-columns: 24px 90px 68px 96px 1fr 18px; }
+    .log-header { gap: 5px; padding: 5px 10px; }
+    .log-filter-btn { padding: 2px 6px; font-size: 10px; height: 22px; }
+    .log-action-btn { padding: 0 6px; font-size: 10px; height: 22px; }
+    .log-title { font-size: 10px; }
+    .log-count { font-size: 9px; padding: 1px 5px; }
+    .ws-badge > span:last-child { display: none; }
+    .btn-shutdown { padding: 0 8px; font-size: 10px; height: 24px; }
+    .btn-port { padding: 0 8px; font-size: 10px; height: 24px; }
+    .port-wrap input { width: 52px; font-size: 11px; }
+    .ctrl-bulk-bar { padding: 4px 10px; gap: 3px; }
+    .btn-bulk { font-size: 11px; padding: 3px 0; }
+    .ctrl-ch-list { padding: 8px; gap: 5px; }
+    .ch-row { padding: 7px 9px; }
+    .ctrl-header { padding: 9px 12px 7px; }
+    .list-toolbar { padding: 8px 10px; gap: 5px; }
+    .btn-icon { padding: 0 9px; font-size: 11px; height: 27px; }
+    .device-list { padding: 7px; gap: 5px; }
+    .card-left { flex: 0 0 130px; }
+    .alarm-header { padding: 8px 10px; }
+    .alarm-panel { height: 180px; }
+  }
+
+  /* 800px: 추가 압축 */
+  @media (max-width: 800px) {
+    .two-col { grid-template-columns: clamp(255px, 30%, 310px) 1fr; }
+    .ctrl-address { display: none; }
+    .card-meta { display: none; }
+    .ch-label { width: 28px; font-size: 11px; }
+    .ch-status-badge { width: 40px; font-size: 10px; padding: 2px 5px; }
+    .btn { padding: 3px 7px; font-size: 10px; }
+    .ctrl-name { font-size: 13px; }
+    .card-left { flex: 0 0 118px; }
+    .alarm-panel { height: 160px; }
+  }
+
+  /* 720px: 두 번째 텍스트 단계, 로그 컬럼 축소 */
+  @media (max-width: 720px) {
+    .two-col { grid-template-columns: clamp(240px, 28%, 280px) 1fr; }
+    .col-id { display: none; }
+    .log-col-header, .log-row { grid-template-columns: 82px 88px 1fr 16px; }
+    .ctrl-header { padding: 7px 10px 6px; }
+    header h1 { font-size: 12px; }
+    .header-logo { width: 20px; height: 20px; }
+    .ws-badge { padding: 2px 7px; }
+    .ws-dot { width: 6px; height: 6px; }
+    .btn-icon { padding: 0 7px; font-size: 10px; height: 25px; }
+    .list-toolbar { padding: 7px 8px; }
+    .device-list { padding: 6px; gap: 4px; }
+    .card-id { font-size: 10px; }
+    .bulk-bar-label { font-size: 10px; }
+    .btn-bulk { font-size: 10px; }
+    .modal { width: calc(100vw - 24px); padding: 16px; }
+  }
+
+  /* 600px: 로그 필터 숨김, 최소화 */
+  @media (max-width: 600px) {
+    .two-col { grid-template-columns: clamp(200px, 26%, 250px) 1fr; }
+    .log-filters { display: none; }
+    .log-col-header, .log-row { grid-template-columns: 76px 82px 1fr 14px; }
+    .log-col-header { font-size: 9px; padding: 4px 8px; }
+    .log-row { font-size: 10px; padding: 4px 8px; }
+    .log-action-btn { display: none; }
+    .log-header { padding: 4px 8px; }
+    .card-left { flex: 0 0 100px; }
+    .ctrl-ch-list { padding: 6px; gap: 4px; }
+    .ch-row { padding: 6px 8px; }
+    .ctrl-bulk-bar { padding: 3px 8px; gap: 2px; }
+    .btn { padding: 3px 5px; font-size: 10px; }
+    .alarm-panel { height: 130px; }
+    .alarm-item { padding: 6px 8px; }
+    header { padding: 0 10px; height: 46px; }
+    .header-right { gap: 6px; }
+  }
+
+  /* 480px: 극소형, 핵심만 */
+  @media (max-width: 480px) {
+    .two-col { grid-template-columns: clamp(170px, 24%, 220px) 1fr; }
+    .log-col-header, .log-row { grid-template-columns: 68px 74px 1fr 12px; }
+    .log-time { font-size: 10px; }
+    .log-type-pill { padding: 2px 6px; font-size: 10px; }
+    .card-name { font-size: 11px; }
+    .card-id { display: none; }
+    .ctrl-device-id { display: none; }
+    .ctrl-meta { font-size: 10px; }
+    .btn-icon { padding: 0 6px; }
+    .ws-badge { display: none; }
+    .port-wrap input { width: 44px; }
+  }
+  ::-webkit-scrollbar{width:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+  /* 드래그 순서변경 */
+  .device-card[draggable]{cursor:grab;}
+  .device-card.dragging{opacity:.4;cursor:grabbing;}
+  .device-card.drag-over{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-bg);transform:scale(1.01);}
+  /* ── 패널 접기 ── */
+  .btn-panel-toggle{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;margin-left:2px;}
+  .btn-panel-toggle:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+
+  /* 알림 패널 접기 */
+  .alarm-panel.collapsed{height:auto !important;}
+  .alarm-panel.collapsed .alarm-list{display:none;}
+  .alarm-panel.collapsed .alarm-resize-inner{display:none;}
+  #alarmResize.panel-hidden{display:none;}
+
+  /* 로그 패널 접기 */
+  .log-section.collapsed{min-height:0 !important;max-height:none !important;height:auto !important;flex-shrink:0;}
+  .log-section.collapsed .log-body{display:none;}
+  .log-section.collapsed .log-header{border-bottom:none;}
+  #resizeHandle.panel-hidden{display:none;}
+  /* 종료 버튼 */
+  .btn-shutdown{height:26px;padding:0 12px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;display:inline-flex;align-items:center;justify-content:center;}
+  .btn-shutdown:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+
+  /* ── 설정 드롭다운 */
+  .settings-wrap{position:relative;}
+  .settings-menu{position:absolute;right:0;top:34px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);z-index:300;min-width:140px;overflow:hidden;display:none;}
+  .settings-menu.show{display:flex;flex-direction:column;}
+  .settings-menu-item{padding:9px 16px;font-size:13px;cursor:pointer;text-align:left;background:none;border:none;font-family:'Noto Sans KR',sans-serif;color:var(--text);transition:background .1s;white-space:nowrap;width:100%;}
+  .settings-menu-item:hover{background:var(--bg3);}
+  .settings-menu-item.danger{color:var(--red);}
+  .settings-menu-item.danger:hover{background:var(--red-bg);}
+  .settings-divider{height:1px;background:var(--border2);margin:4px 0;}
+  .settings-tcp{display:flex;align-items:center;gap:6px;padding:8px 16px;}
+  .settings-tcp-label{font-size:12px;color:var(--text2);white-space:nowrap;flex-shrink:0;}
+  .settings-tcp-input{width:54px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:3px 6px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;outline:none;}
+  .settings-tcp-input:focus{border-color:var(--blue);}
+  .settings-tcp-btn{height:24px;padding:0 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;white-space:nowrap;flex-shrink:0;}
+  .settings-tcp-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+
+  /* ── 로그인 오버레이 */
+  .login-overlay{position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;align-items:center;justify-content:center;}
+  .login-overlay.hidden{display:none;}
+  .login-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:44px 40px 36px;width:360px;max-width:calc(100vw - 32px);box-shadow:0 8px 32px rgba(0,0,0,.12);display:flex;flex-direction:column;align-items:center;gap:0;}
+  .login-logo{width:52px;height:52px;object-fit:contain;margin-bottom:16px;}
+  .login-title{font-size:18px;font-weight:700;margin-bottom:4px;color:var(--text);}
+  .login-sub{font-size:13px;color:var(--text2);margin-bottom:24px;}
+  .login-form{width:100%;display:flex;flex-direction:column;gap:10px;}
+  .login-form input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:14px;font-family:inherit;transition:border-color .12s;outline:none;}
+  .login-form input:focus{border-color:var(--blue);background:#fff;}
+  .login-error{font-size:12px;color:var(--red);min-height:18px;text-align:center;margin-top:-2px;}
+  .btn-login{width:100%;padding:11px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;margin-top:4px;}
+  .btn-login:hover{background:var(--blue-dark);}
+  .btn-login:disabled{opacity:.6;cursor:not-allowed;}
+
+  /* ── 헤더 사용자 영역 */
+  .header-user{display:flex;align-items:center;gap:8px;}
+  .header-username{font-size:12px;font-weight:600;color:var(--text2);background:var(--bg3);border:1px solid var(--border);padding:3px 10px;border-radius:20px;}
+  .btn-logout{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-logout:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .btn-cert{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-cert:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+
+  /* ── 사용자 관리 모달 */
+  .user-modal{width:460px;max-width:calc(100vw - 24px);}
+  .user-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;margin-bottom:4px;}
+  .user-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;}
+  .user-row-info{flex:1;min-width:0;}
+  .user-row-name{font-size:13px;font-weight:600;color:var(--text);}
+  .user-row-meta{font-size:11px;color:var(--text2);margin-top:1px;}
+  .user-role-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;}
+  .user-role-badge.admin{background:var(--blue-bg);color:var(--blue);border:1px solid #93c5fd;}
+  .user-role-badge.user{background:var(--gray-bg);color:var(--text2);border:1px solid var(--border);}
+  .user-row-btns{display:flex;gap:5px;}
+  .btn-user-edit{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-user-edit:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .btn-user-del{height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-user-del:hover{border-color:var(--red);color:var(--red);background:var(--red-bg);}
+  .form-row select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:13px;font-family:inherit;transition:border-color .12s;}
+  .form-row select:focus{outline:none;border-color:var(--blue);}
+  .form-hint{font-size:11px;color:var(--text3);margin-top:3px;}
+  /* ── 인증서 안내 모달 */
+  .cert-modal{width:500px;max-width:calc(100vw - 24px);}
+  .cert-steps{display:flex;flex-direction:column;gap:12px;margin:16px 0;}
+  .cert-step{display:flex;gap:12px;align-items:flex-start;}
+  .cert-step-num{width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+  .cert-step-text{font-size:13px;color:var(--text);line-height:1.6;}
+  .cert-step-text b{color:var(--blue);}
+  .cert-step-text code{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .cert-dl-btn{width:100%;padding:11px;background:var(--green);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;margin-bottom:8px;}
+  .cert-dl-btn:hover{background:#15803d;}
+  .cert-note{font-size:11px;color:var(--text3);text-align:center;line-height:1.6;}
+
+  /* ── 온보딩 가이드 모달 */
+  .onboarding-modal{width:480px;max-width:calc(100vw - 24px);}
+  .onboarding-desc{font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6;}
+  .onboarding-item{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border2);border-radius:8px;margin-bottom:8px;transition:background .15s;}
+  .onboarding-item.done{background:var(--green-bg);border-color:#bbf7d0;}
+  .onboarding-item.todo{background:var(--bg3);border-color:var(--border);}
+  .onboarding-item.optional{background:var(--yellow-bg);border-color:#fde68a;}
+  .onboarding-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center;margin-top:1px;}
+  .onboarding-body{flex:1;min-width:0;}
+  .onboarding-title{font-size:13px;font-weight:600;margin-bottom:3px;color:var(--text);}
+  .onboarding-sub{font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5;}
+  .onboarding-item.done .onboarding-sub{color:var(--green);}
+  .btn-onboarding{height:26px;padding:0 12px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:11px;font-family:'Noto Sans KR',sans-serif;transition:all .12s;}
+  .btn-onboarding:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  /* ── 온보딩 체크리스트 */
+  .onboard-modal{width:480px;max-width:calc(100vw - 24px);}
+  .onboard-intro{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+  .onboard-list{display:flex;flex-direction:column;gap:10px;margin-bottom:20px;}
+  .onboard-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);}
+  .onboard-item.done{border-color:var(--green);background:var(--green-bg);}
+  .onboard-item.todo{border-color:var(--yellow);background:var(--yellow-bg);}
+  .onboard-icon{font-size:18px;flex-shrink:0;width:22px;text-align:center;}
+  .onboard-text{flex:1;min-width:0;}
+  .onboard-label{font-size:13px;font-weight:600;color:var(--text);}
+  .onboard-desc{font-size:11px;color:var(--text2);margin-top:2px;}
+  .onboard-item.done .onboard-desc{color:var(--green);}
+  .onboard-item.todo .onboard-desc{color:#92400e;}
+  .onboard-btn{height:28px;padding:0 12px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:11px;font-weight:600;font-family:'Noto Sans KR',sans-serif;white-space:nowrap;flex-shrink:0;transition:all .12s;}
+  .onboard-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .onboard-footer{display:flex;align-items:center;justify-content:space-between;}
+  .onboard-dismiss{font-size:12px;color:var(--text3);cursor:pointer;text-decoration:underline;text-underline-offset:2px;background:none;border:none;font-family:inherit;padding:0;}
+  .onboard-dismiss:hover{color:var(--text2);}
+
+  /* admin-only: 비관리자에게 숨김 */
+  .admin-only{display:none;}
+  body.is-admin .admin-only{display:inline-flex;}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <img src="logo_ci.png" class="header-logo" alt="" onerror="this.style.display='none'">
+    <h1>전원 제어 장치</h1>
+  </div>
+  <div class="header-right">
+    <div class="ws-badge"><div class="ws-dot" id="wsDot"></div><span id="wsStatus">연결 중</span></div>
+    <div class="db-badge" id="dbBadge" title="DB 미연결 — 로그 기능을 사용하려면 설정에서 DB를 연결하세요">
+      <span class="db-dot" id="dbDot"></span><span id="dbStatus">DB</span>
+    </div>
+    <div class="header-user">
+      <span class="header-username" id="headerUsername"></span>
+      <div class="settings-wrap admin-only" id="settingsWrap">
+        <button class="btn-icon" onclick="toggleSettingsMenu()">설정 ▾</button>
+        <div class="settings-menu" id="settingsMenu">
+          <div class="settings-tcp">
+            <span class="settings-tcp-label">TCP 포트</span>
+            <input id="tcpPort" value="5002" class="settings-tcp-input">
+            <button onclick="changeTCPPort()" class="settings-tcp-btn">적용</button>
+          </div>
+          <div class="settings-divider"></div>
+          <button class="settings-menu-item" onclick="openDbConfigModal();closeSettingsMenu()">DB 설정</button>
+          <div class="settings-divider"></div>
+          <button class="settings-menu-item" onclick="openOnboarding();closeSettingsMenu()">시작 가이드</button>
+          <div class="settings-divider"></div>
+          <button class="settings-menu-item" onclick="openUserModal();closeSettingsMenu()">사용자 관리</button>
+          <div class="settings-divider"></div>
+          <button class="settings-menu-item danger" onclick="confirmShutdown();closeSettingsMenu()">서버 종료</button>
+        </div>
+      </div>
+      <button class="btn-cert" onclick="document.getElementById('certModal').classList.add('show')">인증서 설치</button>
+      <button class="btn-logout" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+</header>
+<div class="body-wrap">
+  <div class="two-col">
+    <!-- 왼쪽: 제어패널 + 알림 -->
+    <div class="left-col">
+      <div class="ctrl-panel">
+        <div id="ctrlEmpty" class="ctrl-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/>
+          </svg>
+          <span>장비를 선택하세요</span>
+        </div>
+        <div id="ctrlContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+          <div class="ctrl-header">
+            <div class="ctrl-header-top">
+              <div class="ctrl-link-led" id="ctrlLinkLed"></div>
+              <div class="ctrl-link-text" id="ctrlLinkText"></div>
+            </div>
+            <div class="ctrl-name" id="ctrlName">-</div>
+            <div class="ctrl-device-id" id="ctrlDeviceId">-</div>
+            <div class="ctrl-address" id="ctrlAddress"></div>
+            <div class="ctrl-meta">
+              <span id="ctrlTime">-</span>
+              <span id="ctrlFwVer" style="font-size:11px;color:var(--text3);"></span>
+            </div>
+          </div>
+          <div class="ctrl-body">
+            <div class="ctrl-bulk-bar">
+              <span class="bulk-bar-label">전체 채널</span>
+              <button class="btn-bulk btn-bulk-on"  id="bulkOn"  onclick="sendBulk('ON')">ON</button>
+              <button class="btn-bulk btn-bulk-off" id="bulkOff" onclick="sendBulk('OFF')">OFF</button>
+              <button class="btn-bulk btn-bulk-rst" id="bulkRst" onclick="sendBulk('RESET')">RESET</button>
+            </div>
+            <div class="ctrl-ch-list" id="ctrlChannels"></div>
+          </div>
+        </div>
+      </div>
+      <div class="alarm-resize" id="alarmResize"></div>
+      <div class="alarm-panel">
+        <div class="alarm-header">
+          <span class="alarm-title">알림</span>
+          <span class="alarm-badge" id="alarmBadge">0</span>
+          <button class="btn-alarm-clear" onclick="deleteAllAlarms()"><span class="abbr-l">전체 삭제</span><span class="abbr-ms">삭제</span></button>
+          <button class="btn-panel-toggle" id="alarmToggle" onclick="toggleAlarmPanel()" title="접기">▼</button>
+        </div>
+        <div class="alarm-list" id="alarmList">
+          <div class="alarm-empty" id="alarmEmpty">알림이 없습니다</div>
+        </div>
+      </div>
+    </div>
+    <!-- 오른쪽: 장비목록 + 로그 -->
+    <div class="right-col">
+      <div class="list-panel">
+        <div class="list-toolbar">
+          <span><span class="abbr-l">장비 목록</span><span class="abbr-ms">목록</span></span>
+          <button class="btn-icon" onclick="openAddModal()" title="추가"><span class="abbr-l">추가</span><span class="abbr-ms">+</span></button>
+          <button class="btn-icon" onclick="openEditModal()" title="수정"><span class="abbr-l">수정</span><span class="abbr-ms">✎</span></button>
+          <button class="btn-icon danger" onclick="deleteDevice()" title="삭제"><span class="abbr-l">삭제</span><span class="abbr-ms">✕</span></button>
+        </div>
+        <div class="device-list" id="deviceList"></div>
+      </div>
+      <div class="resize-handle" id="resizeHandle"></div>
+      <div class="log-section" id="logSection">
+        <div class="log-header">
+          <span class="log-title"><span class="abbr-l">패킷 </span>로그</span>
+          <span class="log-count" id="logCount">0</span>
+          <div class="log-filters">
+            <button class="log-filter-btn send   active" onclick="toggleFilter('send',this)">송신</button>
+            <button class="log-filter-btn ack    active" onclick="toggleFilter('ack',this)">ACK</button>
+            <button class="log-filter-btn status active" onclick="toggleFilter('status',this)">상태</button>
+            <div class="log-filter-sep"></div>
+            <button class="log-filter-btn conn   active" onclick="toggleFilter('connect',this)">연결</button>
+            <button class="log-filter-btn disc   active" onclick="toggleFilter('disconnect',this)">해제</button>
+            <button class="log-filter-btn to     active" onclick="toggleFilter('timeout',this)">타임아웃</button>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:5px;">
+            <button class="log-action-btn" id="logSearchBtn" onclick="openLogSearch()">로그 검색</button>
+            <span id="logNoDbNote" style="font-size:11px;color:var(--red);display:none;">DB 미연결</span>
+            <button class="btn-panel-toggle" id="logToggle" onclick="toggleLogPanel()" title="접기">▼</button>
+          </div>
+        </div>
+        <div class="log-body" id="logBody">
+          <div class="log-col-header">
+            <span>시각</span><span class="col-name">장비명</span><span class="col-id">ID</span><span>유형</span><span>요약</span><span></span>
+          </div>
+          <div class="log-empty" id="logEmpty">수신된 패킷이 없습니다</div>
+        </div>
+      </div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle">장비 추가</h3>
+    <div class="form-row">
+      <label>함체 위치명 <span class="required">*</span></label>
+      <input id="fLocationName" placeholder="함체 위치를 작성해 주세요">
+    </div>
+    <div class="form-row">
+      <label>DEVICE ID <span class="required">*</span></label>
+      <input id="fDeviceId" placeholder="ID는 6자리입니다" maxlength="6" style="font-family:'JetBrains Mono',monospace;">
+    </div>
+    <div class="form-row">
+      <label>IP 주소</label>
+      <input id="fIp" placeholder="장비 IP를 입력해 주세요">
+    </div>
+    <div class="form-row">
+      <label>설치 주소</label>
+      <input id="fAddress" placeholder="설치 위치를 작성해 주세요">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-primary" onclick="submitModal()">저장</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="alertModal">
+  <div class="alert-box">
+    <div class="alert-icon-wrap" id="alertIcon"></div>
+    <div class="alert-msg" id="alertMsg"></div>
+    <div class="alert-btns" id="alertBtns"></div>
+  </div>
+</div>
+<div class="modal-bg" id="detailModal">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <span class="detail-title" id="detailTitle">로그 상세</span>
+      <button class="detail-close" onclick="closeDetailModal()">✕</button>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ── 인증서 설치 안내 모달 -->
+<div class="modal-bg" id="certModal">
+  <div class="modal cert-modal">
+    <h3>🔒 HTTPS 인증서 설치</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:4px;">이 인증서를 설치하면 브라우저 보안 경고가 사라집니다.<br>접속하는 <b>모든 PC에서 한 번씩</b> 설치해야 합니다.</p>
+    <div class="cert-steps">
+      <div class="cert-step"><div class="cert-step-num">1</div><div class="cert-step-text">아래 버튼으로 인증서 파일을 다운로드하세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">2</div><div class="cert-step-text">다운로드된 <code>DeviceManager-CA.crt</code> 파일을 <b>더블클릭</b>하세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text"><b>인증서 설치</b> → <b>로컬 컴퓨터</b> → <b>모든 인증서를 다음 저장소에 저장</b> → <b>찾아보기</b> → <b>신뢰할 수 있는 루트 인증 기관</b> 선택 → <b>확인 → 다음 → 마침</b></div></div>
+      <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 종료</b>했다가 다시 열고 접속하세요.</div></div>
+    </div>
+    <button class="cert-dl-btn" onclick="downloadCert()">⬇ 인증서 다운로드 (DeviceManager-CA.crt)</button>
+    <div class="cert-note">Firefox 사용자는 브라우저 설정 → 인증서 보기 → 인증 기관 → 가져오기에서 별도 설치가 필요합니다.</div>
+    <div class="modal-btns" style="margin-top:16px;">
+      <button class="btn-cancel" onclick="document.getElementById('certModal').classList.remove('show')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 로그 검색 모달 -->
+<div class="modal-bg" id="logSearchModal">
+  <div class="log-search-modal">
+    <div class="log-search-header">
+      <span class="log-search-title">로그 검색</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+        <button class="log-action-btn csv-btn" id="csvExportBtn" onclick="exportLogsCSV()">CSV 내보내기</button>
+        <button class="detail-close" onclick="closeLogSearch()">✕</button>
+      </div>
+    </div>
+    <div class="log-search-filters">
+      <div class="ls-filter-rows">
+        <div class="ls-filter-row1">
+          <div class="ls-filter-item">
+            <label class="ls-label">장비 ID</label>
+            <input class="ls-input" id="lfDeviceId" placeholder="0023C7" onkeydown="if(event.key==='Enter')applyLogFilter()">
+          </div>
+          <div class="ls-filter-item">
+            <label class="ls-label">유형</label>
+            <select class="ls-input" id="lfDir">
+              <option value="">전체</option>
+              <option value="send">송신</option>
+              <option value="ack">ACK</option>
+              <option value="status">상태</option>
+              <option value="connect">연결</option>
+              <option value="disconnect">해제</option>
+              <option value="timeout">타임아웃</option>
+            </select>
+          </div>
+          <div class="ls-filter-item">
+            <label class="ls-label">사용자</label>
+            <input class="ls-input" id="lfUser" placeholder="사용자명" onkeydown="if(event.key==='Enter')applyLogFilter()">
+          </div>
+          <div class="ls-filter-item ls-filter-wide">
+            <label class="ls-label">키워드</label>
+            <input class="ls-input" id="lfKeyword" placeholder="요약 내용 검색" onkeydown="if(event.key==='Enter')applyLogFilter()">
+          </div>
+        </div>
+        <div class="ls-filter-row2">
+          <div class="ls-filter-item">
+            <label class="ls-label">시작일</label>
+            <div class="ls-date-wrap">
+              <input type="date" id="lfDateFrom" class="ls-input log-filter-date" onkeydown="if(event.key==='Enter')applyLogFilter()" onchange="updateDateLabel('lfDateFrom','lbDateFrom')" oninput="updateDateLabel('lfDateFrom','lbDateFrom')">
+              <span class="ls-date-label" id="lbDateFrom">시작일</span>
+            </div>
+          </div>
+          <div class="ls-filter-item">
+            <label class="ls-label">종료일</label>
+            <div class="ls-date-wrap">
+              <input type="date" id="lfDateTo" class="ls-input log-filter-date" onkeydown="if(event.key==='Enter')applyLogFilter()" onchange="updateDateLabel('lfDateTo','lbDateTo')" oninput="updateDateLabel('lfDateTo','lbDateTo')">
+              <span class="ls-date-label" id="lbDateTo">종료일</span>
+            </div>
+          </div>
+          <div class="ls-filter-actions">
+            <button class="btn-log-filter" onclick="applyLogFilter()">검색</button>
+            <button class="btn-log-reset"  onclick="resetLogFilter()">초기화</button>
+            <span class="log-total-note" id="logTotalNote"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="log-search-body">
+      <div class="log-col-header">
+        <span>시각</span><span class="col-name">장비명</span><span class="col-id">ID</span><span>유형</span><span>요약</span><span></span>
+      </div>
+      <div id="logSearchEmpty" class="log-empty">검색 결과가 없습니다</div>
+      <div id="logSearchRows"></div>
+    </div>
+    <div class="log-pager" id="logPager"></div>
+  </div>
+</div>
+
+<!-- ── 로그인 오버레이 -->
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <img src="logo_ci.png" class="login-logo" alt="" onerror="this.style.display='none'">
+    <h2 class="login-title">전원 제어 장치</h2>
+    <p class="login-sub">로그인하여 계속하세요</p>
+    <div class="login-form">
+      <input id="loginUser" type="text" placeholder="아이디" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+      <input id="loginPass" type="password" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="loginErr" class="login-error"></div>
+      <button class="btn-login" id="loginBtn" onclick="doLogin()">로그인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 사용자 관리 모달 -->
+<div class="modal-bg" id="userModal">
+  <div class="modal user-modal">
+    <h3>사용자 관리</h3>
+    <div class="user-list" id="userList"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeUserModal()">닫기</button>
+      <button class="btn-primary" onclick="openUserEditModal('add')">+ 사용자 추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 사용자 추가/수정 모달 -->
+<div class="modal-bg" id="userEditModal">
+  <div class="modal">
+    <h3 id="userEditTitle">사용자 추가</h3>
+    <div class="form-row">
+      <label>아이디 <span class="required">*</span></label>
+      <input id="fUserUsername" placeholder="아이디 (2~32자)">
+    </div>
+    <div class="form-row">
+      <label id="fUserPwLabel">비밀번호 <span class="required">*</span></label>
+      <input id="fUserPassword" type="password" placeholder="비밀번호 (4자 이상)">
+      <div class="form-hint" id="fUserPwHint"></div>
+    </div>
+    <div class="form-row">
+      <label>권한</label>
+      <select id="fUserRole">
+        <option value="user">일반 사용자 (조회 + 제어)</option>
+        <option value="admin">관리자 (전체 권한)</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeUserEditModal()">취소</button>
+      <button class="btn-primary" onclick="submitUserModal()">저장</button>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+
+<!-- ── 온보딩 가이드 모달 -->
+<div class="modal-bg" id="onboardingModal">
+  <div class="modal onboarding-modal">
+    <h3>🚀 시작 가이드</h3>
+    <p class="onboarding-desc">처음 사용하시나요? 아래 항목을 순서대로 확인해 주세요.</p>
+    <div id="onboardingList"></div>
+    <div class="modal-btns" style="justify-content:space-between;margin-top:18px;">
+      <button class="btn-cancel" onclick="dismissOnboarding()">다시 보지 않기</button>
+      <button class="btn-primary" onclick="closeOnboarding()">닫기</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="dbConfigModal">
+  <div class="modal db-modal">
+    <h3>🗄️ DB 설정</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
+      MariaDB 접속 정보를 입력하세요. 저장하면 즉시 재연결을 시도합니다.
+    </p>
+    <div class="form-row">
+      <label>호스트</label>
+      <input id="dbHost" placeholder="localhost">
+    </div>
+    <div class="form-row">
+      <label>포트</label>
+      <input id="dbPort" placeholder="3306" style="width:100px;">
+    </div>
+    <div class="form-row">
+      <label>사용자</label>
+      <input id="dbUser" placeholder="root">
+    </div>
+    <div class="form-row">
+      <label>비밀번호</label>
+      <input id="dbPassword" type="password" placeholder="(비어있으면 변경 안 함)">
+    </div>
+    <div class="form-row">
+      <label>데이터베이스</label>
+      <input id="dbDatabase" placeholder="device_manager">
+    </div>
+    <div id="dbConnResult" class="db-conn-result"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeDbConfigModal()">닫기</button>
+      <button class="btn-primary" id="dbSaveBtn" onclick="saveDbConfig()">저장 및 연결</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
