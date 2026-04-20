@@ -41,7 +41,6 @@ node server.js
 - MariaDB 로그 기록 / 검색 / CSV 내보내기
 - 다중 사용자 및 역할 구분 (관리자 / 일반 사용자)
 - HTTPS 자동 인증서 생성 (openssl 또는 순수 Node.js)
-- `pkg`로 단일 `.exe` 패키징 지원
 
 ## 파일 구조
 
