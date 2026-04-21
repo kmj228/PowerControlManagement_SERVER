@@ -7,32 +7,45 @@ echo   IoT 장비 관리 서버
 echo ===================================
 echo.
 
-:: EXE 버전 확인
-if exist "%~dp0DeviceManager.exe" (
-    echo EXE 버전으로 실행합니다...
-    start "" "%~dp0DeviceManager.exe"
-    echo 서버가 실행되었습니다.
-    echo 브라우저에서 https://localhost:3000 으로 접속하세요.
-    pause
-    exit /b 0
-)
-
 :: Node.js 설치 확인
 node --version > nul 2>&1
 if %errorlevel% neq 0 (
-    echo [오류] Node.js가 설치되어 있지 않습니다.
+    echo [안내] Node.js가 설치되어 있지 않습니다. 자동으로 설치합니다...
     echo.
-    echo Node.js를 설치한 후 다시 실행해주세요:
-    echo   https://nodejs.org
+
+    :: winget 사용 가능 여부 확인 (Windows 10/11)
+    winget --version > nul 2>&1
+    if %errorlevel% equ 0 (
+        echo winget으로 Node.js LTS를 설치합니다...
+        winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
+    ) else (
+        :: PowerShell로 MSI 다운로드 후 설치
+        echo Node.js LTS를 다운로드합니다. 잠시 기다려주세요...
+        powershell -Command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi' -OutFile '%TEMP%\node_installer.msi'"
+        echo 설치 중...
+        msiexec /i "%TEMP%\node_installer.msi" /quiet /norestart
+        del "%TEMP%\node_installer.msi" > nul 2>&1
+    )
+
+    :: 설치 후 PATH에 Node.js 추가 (현재 세션 반영)
+    set "PATH=C:\Program Files\nodejs;%PATH%"
+
+    :: 재확인
+    node --version > nul 2>&1
+    if %errorlevel% neq 0 (
+        echo.
+        echo [안내] 설치가 완료되었습니다.
+        echo 이 창을 닫고 start.bat 을 다시 실행해주세요.
+        pause
+        exit /b 0
+    )
+    echo Node.js 설치 완료!
     echo.
-    pause
-    exit /b 1
 )
 
 :: 의존성 확인
 if not exist "%~dp0node_modules" (
-    echo [안내] 첫 실행입니다. 의존성 패키지를 설치합니다...
-    echo.
+    echo 의존성 패키지를 설치합니다...
     cd /d "%~dp0"
     npm install
     echo.
