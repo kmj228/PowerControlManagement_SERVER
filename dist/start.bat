@@ -13,13 +13,11 @@ if %errorlevel% neq 0 (
     echo [안내] Node.js가 설치되어 있지 않습니다. 자동으로 설치합니다...
     echo.
 
-    :: winget 사용 가능 여부 확인 (Windows 10/11)
     winget --version > nul 2>&1
     if %errorlevel% equ 0 (
         echo winget으로 Node.js LTS를 설치합니다...
         winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements
     ) else (
-        :: PowerShell로 MSI 다운로드 후 설치
         echo Node.js LTS를 다운로드합니다. 잠시 기다려주세요...
         powershell -Command "Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.18.0/node-v20.18.0-x64.msi' -OutFile '%TEMP%\node_installer.msi'"
         echo 설치 중...
@@ -27,10 +25,8 @@ if %errorlevel% neq 0 (
         del "%TEMP%\node_installer.msi" > nul 2>&1
     )
 
-    :: 설치 후 PATH에 Node.js 추가 (현재 세션 반영)
     set "PATH=C:\Program Files\nodejs;%PATH%"
 
-    :: 재확인
     node --version > nul 2>&1
     if %errorlevel% neq 0 (
         echo.
@@ -75,11 +71,37 @@ if %DB_FOUND%==0 (
     echo.
 )
 
+:: server.js 위치 탐색 (현재 폴더 → 상위의 source 폴더 순서로 확인)
+set SERVER_DIR=
+if exist "%~dp0server.js" (
+    set SERVER_DIR=%~dp0
+) else if exist "%~dp0..\source\server.js" (
+    pushd "%~dp0..\source"
+    set SERVER_DIR=%CD%\
+    popd
+)
+
+if not defined SERVER_DIR (
+    echo [오류] server.js 파일을 찾을 수 없습니다.
+    echo.
+    echo start.bat 과 server.js 가 같은 폴더에 있어야 합니다.
+    echo 또는 source\ 폴더 안에 server.js 가 있어야 합니다.
+    echo.
+    pause
+    exit /b 1
+)
+
 :: 의존성 확인
-if not exist "%~dp0node_modules" (
+if not exist "%SERVER_DIR%node_modules" (
     echo 의존성 패키지를 설치합니다...
-    cd /d "%~dp0"
+    cd /d "%SERVER_DIR%"
     npm install
+    if %errorlevel% neq 0 (
+        echo.
+        echo [오류] 패키지 설치에 실패했습니다.
+        pause
+        exit /b 1
+    )
     echo.
 )
 
@@ -88,6 +110,6 @@ echo 서버를 시작합니다...
 echo 브라우저에서 https://localhost:3000 으로 접속하세요.
 echo 종료하려면 Ctrl+C 를 누르세요.
 echo.
-cd /d "%~dp0"
+cd /d "%SERVER_DIR%"
 node server.js
 pause
