@@ -6,7 +6,7 @@
   "bin": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "taskkill /F /IM DeviceManager.exe 2>nul & pkg . --targets node18-win-x64 --output ../dist/DeviceManager.exe --compress GZip"
+    "build": "taskkill /F /IM DeviceManager.exe 2>nul & npx pkg . --targets node18-win-x64 --output ../dist/DeviceManager.exe --compress GZip"
   },
   "pkg": {
     "assets": [
@@ -20,5 +20,8 @@
   },
   "dependencies": {
     "mysql2": "^3.22.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }
