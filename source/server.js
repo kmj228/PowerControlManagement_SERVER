@@ -75,7 +75,7 @@ function loadUsers() {
   saveUsers();
   console.log('');
   console.log('─────────────────────────────────────────');
-  console.log('  기본 admin 계정이 생성되었습니다.');
+  console.log('  기본 admin 계정을 만들었어요.');
   console.log('  아이디: admin  /  비밀번호: admin1234');
   console.log('  보안을 위해 로그인 후 변경해 주세요.');
   console.log('─────────────────────────────────────────');
@@ -107,13 +107,13 @@ function getSession(req) {
 }
 function requireAuth(req, res) {
   const sess = getSession(req);
-  if (!sess) { res.writeHead(401,{'Content-Type':'application/json'}); res.end(JSON.stringify({error:'로그인이 필요합니다.'})); return null; }
+  if (!sess) { res.writeHead(401,{'Content-Type':'application/json'}); res.end(JSON.stringify({error:'로그인이 필요해요.'})); return null; }
   return sess;
 }
 function requireAdmin(req, res) {
   const sess = requireAuth(req, res);
   if (!sess) return null;
-  if (sess.role !== 'admin') { res.writeHead(403,{'Content-Type':'application/json'}); res.end(JSON.stringify({error:'관리자 권한이 필요합니다.'})); return null; }
+  if (sess.role !== 'admin') { res.writeHead(403,{'Content-Type':'application/json'}); res.end(JSON.stringify({error:'관리자 권한이 필요해요.'})); return null; }
   return sess;
 }
 
@@ -153,8 +153,8 @@ function loadDbConfig() {
     fs.writeFileSync(cfgFile, JSON.stringify(defaults, null, 2), 'utf8');
     console.log('');
     console.log('─────────────────────────────────────────────────');
-    console.log('  DB 설정 파일이 생성되었습니다.');
-    console.log('  data/db.json 을 열어 DB 접속 정보를 입력하세요.');
+    console.log('  DB 설정 파일을 만들었어요.');
+    console.log('  data/db.json 을 열어 DB 연결 정보를 입력해 주세요.');
     console.log('─────────────────────────────────────────────────');
     console.log('');
   }
@@ -219,7 +219,7 @@ async function initDB() {
     return true;
   } catch(e) {
     console.error('[DB] 연결 실패:', e.message);
-    console.error('[DB] data/db.json 의 접속 정보를 확인해 주세요.');
+    console.error('[DB] data/db.json 의 연결 정보를 확인해 주세요.');
     dbPool = null;
     return false;
   }
@@ -396,7 +396,7 @@ function clearTimeoutTimer(deviceId) {
 function startTCPServer(port) {
   const srv = net.createServer(handleConnection);
   srv.on('error', (e) => {
-    if (e.code === 'EADDRINUSE') console.error('[TCP 오류] 포트 ' + port + ' 가 이미 사용 중입니다.');
+    if (e.code === 'EADDRINUSE') console.error('[TCP 오류] 포트 ' + port + ' 가 이미 사용 중이에요.');
     else console.error('[TCP 오류] ' + e.message);
   });
   srv.listen(port, () => { TCP_PORT = port; tcpServerInstance = srv; console.log('[서버 시작] TCP  :' + port); });
@@ -483,7 +483,7 @@ async function requestHandler(req, res) {
             } catch(e) {}
           }
           res.writeHead(401,{'Content-Type':'application/json'});
-          return res.end(JSON.stringify({error:'아이디 또는 비밀번호가 올바르지 않습니다.'}));
+          return res.end(JSON.stringify({error:'아이디 또는 비밀번호가 올바르지 않아요.'}));
         }
         // 중복 로그인 방지: 기존 세션 만료
         for (const [token, s] of sessions.entries()) {
@@ -497,7 +497,7 @@ async function requestHandler(req, res) {
         clog('로그인', username, user.role, clientIp);
         res.writeHead(200, {'Content-Type':'application/json', 'Set-Cookie': `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`});
         res.end(JSON.stringify({ok:true, username, role:user.role}));
-      } catch(e) { res.writeHead(400,{'Content-Type':'application/json'}); res.end(JSON.stringify({error:'잘못된 요청입니다.'})); }
+      } catch(e) { res.writeHead(400,{'Content-Type':'application/json'}); res.end(JSON.stringify({error:'잘못된 요청이에요.'})); }
     }); return;
   }
 
@@ -511,7 +511,7 @@ async function requestHandler(req, res) {
 
   if (url === '/api/me' && method === 'GET') {
     const sess = getSession(req);
-    if (!sess) { res.writeHead(401,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'로그인이 필요합니다.'})); }
+    if (!sess) { res.writeHead(401,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'로그인이 필요해요.'})); }
     res.writeHead(200,{'Content-Type':'application/json'});
     return res.end(JSON.stringify({username:sess.username, role:sess.role}));
   }
@@ -579,7 +579,7 @@ async function requestHandler(req, res) {
       const { deviceId, ip, locationName, address } = JSON.parse(body);
       if (!deviceId) { res.writeHead(400); return res.end(JSON.stringify({error:'Device ID를 입력해 주세요.'})); }
       const devs = getDevices();
-      if (devs.find(d => d.deviceId===deviceId.toUpperCase())) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 Device ID 입니다.'})); }
+      if (devs.find(d => d.deviceId===deviceId.toUpperCase())) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 Device ID예요.'})); }
       const newDev = { deviceId:deviceId.toUpperCase(), ip:ip||'', locationName:locationName||'', address:address||'', channels:[-1,-1,-1,-1], currents:[0,0,0,0], fwVer:'', lastUpdate:'', linkState:'never' };
       devs.push(newDev);
       persistDevices();
@@ -612,7 +612,7 @@ async function requestHandler(req, res) {
       if (idx===-1) { res.writeHead(404); return res.end('{}'); }
       if (update.deviceId && update.deviceId !== oldId) {
         const newId = update.deviceId.toUpperCase();
-        if (devs.find(d => d.deviceId===newId)) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 Device ID 입니다.'})); }
+        if (devs.find(d => d.deviceId===newId)) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 Device ID예요.'})); }
         update.deviceId = newId;
         const wasConnected = tcpClients.has(oldId);
         tcpClients.delete(oldId); clearTimeoutTimer(oldId);
@@ -641,7 +641,7 @@ async function requestHandler(req, res) {
     req.on('end', () => {
       const { tcpPort } = JSON.parse(body);
       const port = parseInt(tcpPort);
-      if (!port || port < 1 || port > 65535) { res.writeHead(400); return res.end(JSON.stringify({error:'유효하지 않은 포트 번호입니다.'})); }
+      if (!port || port < 1 || port > 65535) { res.writeHead(400); return res.end(JSON.stringify({error:'유효하지 않은 포트 번호예요.'})); }
       restartTCPServer(port, () => { res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true, port})); });
     }); return;
   }
@@ -649,7 +649,7 @@ async function requestHandler(req, res) {
   // ── 로그 API
   if (url.startsWith('/api/logs') && method === 'GET' && url !== '/api/logs/export.csv') {
     if (!requireAuth(req, res)) return;
-    if (!dbPool) { res.writeHead(503,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'DB 연결이 없습니다.'})); }
+    if (!dbPool) { res.writeHead(503,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'DB가 연결돼 있지 않아요.'})); }
     try {
       const qs = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
       const page     = Math.max(1, parseInt(qs.get('page') || '1'));
@@ -682,7 +682,7 @@ async function requestHandler(req, res) {
   }
   if (url === '/api/logs/all' && method === 'DELETE') {
     if (!requireAdmin(req, res)) return;
-    if (!dbPool) { res.writeHead(503,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'DB 연결이 없습니다.'})); }
+    if (!dbPool) { res.writeHead(503,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'DB가 연결돼 있지 않아요.'})); }
     try {
       const [[{ total }]] = await dbPool.execute('SELECT COUNT(*) as total FROM logs');
       await dbPool.execute('TRUNCATE TABLE logs');
@@ -732,7 +732,7 @@ async function requestHandler(req, res) {
       const { deviceId, ch, cmd } = JSON.parse(body);
       const cmdMap = { ON:0x01, OFF:0x00, RESET:0x02 };
       const sock = tcpClients.get(deviceId.toUpperCase());
-      if (!sock) { res.writeHead(404,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'장비가 연결되어 있지 않습니다.'})); }
+      if (!sock) { res.writeHead(404,{'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'장비가 연결돼 있지 않아요.'})); }
       const packet = buildPacket(deviceId.toUpperCase(), parseInt(ch), cmdMap[cmd]);
       sock.write(packet);
       const raw = packet.toString('hex').toUpperCase();
@@ -813,12 +813,12 @@ async function requestHandler(req, res) {
         if (username.length < 2 || username.length > 32) { res.writeHead(400); return res.end(JSON.stringify({error:'아이디는 2~32자로 입력해 주세요.'})); }
         if (password.length < 4) { res.writeHead(400); return res.end(JSON.stringify({error:'비밀번호는 4자 이상 입력해 주세요.'})); }
         const users = loadUsers();
-        if (users.find(u => u.username === username)) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 아이디입니다.'})); }
+        if (users.find(u => u.username === username)) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 아이디예요.'})); }
         const { hash, salt } = hashPassword(password);
         users.push({ username, passwordHash: hash, salt, role: role || 'user', createdAt: new Date().toISOString() });
         saveUsers();
         res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true}));
-      } catch(e) { res.writeHead(400); res.end(JSON.stringify({error:'잘못된 요청입니다.'})); }
+      } catch(e) { res.writeHead(400); res.end(JSON.stringify({error:'잘못된 요청이에요.'})); }
     }); return;
   }
   if (url.startsWith('/api/users/') && method === 'PUT') {
@@ -831,10 +831,10 @@ async function requestHandler(req, res) {
         const { password, role } = JSON.parse(body);
         const users = loadUsers();
         const idx = users.findIndex(u => u.username === targetUser);
-        if (idx === -1) { res.writeHead(404); return res.end(JSON.stringify({error:'사용자를 찾을 수 없습니다.'})); }
+        if (idx === -1) { res.writeHead(404); return res.end(JSON.stringify({error:'사용자를 찾을 수 없어요.'})); }
         if (role && role !== 'admin' && users[idx].role === 'admin') {
           const adminCount = users.filter(u => u.role === 'admin').length;
-          if (adminCount <= 1) { res.writeHead(400); return res.end(JSON.stringify({error:'마지막 관리자의 권한은 변경할 수 없습니다.'})); }
+          if (adminCount <= 1) { res.writeHead(400); return res.end(JSON.stringify({error:'마지막 관리자의 권한은 변경할 수 없어요.'})); }
         }
         if (password) {
           if (password.length < 4) { res.writeHead(400); return res.end(JSON.stringify({error:'비밀번호는 4자 이상 입력해 주세요.'})); }
@@ -847,7 +847,7 @@ async function requestHandler(req, res) {
         if (role) users[idx].role = role;
         saveUsers();
         res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true}));
-      } catch(e) { res.writeHead(400); res.end(JSON.stringify({error:'잘못된 요청입니다.'})); }
+      } catch(e) { res.writeHead(400); res.end(JSON.stringify({error:'잘못된 요청이에요.'})); }
     }); return;
   }
   if (url.startsWith('/api/users/') && method === 'DELETE') {
@@ -855,10 +855,10 @@ async function requestHandler(req, res) {
     if (!sess) return;
     const targetUser = decodeURIComponent(url.split('/')[3]);
     const users = loadUsers();
-    if (targetUser === sess.username) { res.writeHead(400); return res.end(JSON.stringify({error:'자신의 계정은 삭제할 수 없습니다.'})); }
+    if (targetUser === sess.username) { res.writeHead(400); return res.end(JSON.stringify({error:'자신의 계정은 삭제할 수 없어요.'})); }
     const target = users.find(u => u.username === targetUser);
     if (target?.role === 'admin' && users.filter(u => u.role === 'admin').length <= 1) {
-      res.writeHead(400); return res.end(JSON.stringify({error:'마지막 관리자 계정은 삭제할 수 없습니다.'}));
+      res.writeHead(400); return res.end(JSON.stringify({error:'마지막 관리자 계정은 삭제할 수 없어요.'}));
     }
     usersCache = users.filter(u => u.username !== targetUser); saveUsers();
     for (const [token, s] of sessions.entries()) { if (s.username === targetUser) sessions.delete(token); }
@@ -877,7 +877,7 @@ async function requestHandler(req, res) {
       return res.end(certData);
     } catch(e) {
       res.writeHead(404, {'Content-Type':'application/json'});
-      return res.end(JSON.stringify({error:'인증서 파일을 찾을 수 없습니다.'}));
+      return res.end(JSON.stringify({error:'인증서 파일을 찾을 수 없어요.'}));
     }
   }
 
@@ -1019,7 +1019,7 @@ function tryGenerateCert() {
   }
   // 2단계: 순수 Node.js로 생성
   try {
-    console.log('[HTTPS] Node.js 내장 crypto로 인증서를 생성합니다...');
+    console.log('[HTTPS] Node.js 내장 crypto로 인증서를 생성해요...');
     const { certPem, keyPem } = generateSelfSignedCertPureJS();
     fs.writeFileSync(CERT_FILE, certPem, 'utf8');
     fs.writeFileSync(KEY_FILE, keyPem, 'utf8');
@@ -1036,7 +1036,7 @@ function createHttpsServer() {
     const serverOptions = { cert: fs.readFileSync(CERT_FILE), key: fs.readFileSync(KEY_FILE) };
     const srv = https.createServer(serverOptions, requestHandler);
     isHttps = true;
-    console.log('[HTTPS] HTTPS 모드로 시작합니다.');
+    console.log('[HTTPS] HTTPS 모드로 시작해요.');
     return srv;
   } catch(e) {
     console.warn('[HTTPS] 인증서 로드 실패:', e.message);
@@ -1056,7 +1056,7 @@ if (fs.existsSync(CERT_FILE) && fs.existsSync(KEY_FILE)) {
     const savedIPs   = fs.existsSync(IP_RECORD) ? fs.readFileSync(IP_RECORD, 'utf8').trim() : '';
 
     if (currentIPs !== savedIPs) {
-      console.log('[HTTPS] IP 변경 감지 → 인증서를 재생성합니다...');
+      console.log('[HTTPS] IP 변경 감지 → 인증서를 다시 생성해요...');
       console.log('[HTTPS] 이전 IP: ' + (savedIPs || '(없음)'));
       console.log('[HTTPS] 현재 IP: ' + currentIPs);
       fs.unlinkSync(CERT_FILE); fs.unlinkSync(KEY_FILE);
@@ -1074,14 +1074,14 @@ if (fs.existsSync(CERT_FILE) && fs.existsSync(KEY_FILE)) {
   httpServer = createHttpsServer() || http.createServer(requestHandler);
 } else {
   // 인증서 없으면 openssl로 자동 생성 시도
-  console.log('[HTTPS] 인증서가 없습니다. openssl로 자동 생성을 시도합니다...');
+  console.log('[HTTPS] 인증서가 없어요. openssl로 자동 생성을 시도해요...');
   if (tryGenerateCert()) {
     httpServer = createHttpsServer() || http.createServer(requestHandler);
   } else {
     // openssl 없으면 HTTP로 fallback
     httpServer = http.createServer(requestHandler);
-    console.log('[HTTP] openssl을 찾을 수 없어 HTTP 모드로 시작합니다.');
-    console.log('[HTTP] ※ 외부 인터넷 접속 시 HTTPS를 권장합니다.');
+    console.log('[HTTP] openssl을 찾을 수 없어 HTTP 모드로 시작해요.');
+    console.log('[HTTP] ※ 외부 인터넷 연결 시 HTTPS를 권장해요.');
     console.log('[HTTP] 수동 인증서 생성 명령어:');
     console.log('[HTTP] openssl req -x509 -newkey rsa:2048 -keyout data/key.pem -out data/cert.pem -days 3650 -nodes -subj "/CN=DeviceManager"');
   }
@@ -1113,7 +1113,7 @@ function startHttpServer(port) {
     const proto = isHttps ? 'https' : 'http';
     console.log('');
     console.log('─────────────────────────────────────────────────');
-    console.log('  서버가 시작되었습니다. 아래 주소로 접속하세요.');
+    console.log('  서버가 시작됐어요. 아래 주소로 연결해 주세요.');
     console.log('─────────────────────────────────────────────────');
     console.log(`  로컬    : ${proto}://localhost:${port}`);
     const nets = getNetworkList();
@@ -1130,7 +1130,7 @@ function startHttpServer(port) {
     console.log('');
   });
   httpServer.on('error', (e) => {
-    if (e.code === 'EADDRINUSE') console.error('[HTTP 오류] 포트 ' + port + ' 가 이미 사용 중입니다. 다른 프로그램을 종료해 주세요.');
+    if (e.code === 'EADDRINUSE') console.error('[HTTP 오류] 포트 ' + port + ' 가 이미 사용 중이에요. 다른 프로그램을 종료해 주세요.');
     else console.error('[HTTP 오류] ' + e.message);
   });
 }

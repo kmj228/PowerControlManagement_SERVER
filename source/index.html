@@ -612,7 +612,7 @@
   </div>
   <div class="header-right">
     <div class="ws-badge"><div class="ws-dot" id="wsDot"></div><span id="wsStatus">연결 중</span></div>
-    <div class="db-badge" id="dbBadge" title="DB 미연결 — 로그 기능을 사용하려면 설정에서 DB를 연결하세요">
+    <div class="db-badge" id="dbBadge" title="DB 미연결 — 로그 기능을 사용하려면 설정에서 DB를 연결해 주세요">
       <span class="db-dot" id="dbDot"></span><span id="dbStatus">DB</span>
     </div>
     <div class="header-user">
@@ -693,7 +693,7 @@
           <button class="btn-panel-toggle" id="alarmToggle" onclick="toggleAlarmPanel()" title="접기">▼</button>
         </div>
         <div class="alarm-list" id="alarmList">
-          <div class="alarm-empty" id="alarmEmpty">알림이 없습니다</div>
+          <div class="alarm-empty" id="alarmEmpty">알림이 없어요</div>
         </div>
       </div>
     </div>
@@ -732,7 +732,7 @@
           <div class="log-col-header">
             <span>시각</span><span class="col-name">장비명</span><span class="col-id">ID</span><span>유형</span><span>요약</span><span></span>
           </div>
-          <div class="log-empty" id="logEmpty">수신된 패킷이 없습니다</div>
+          <div class="log-empty" id="logEmpty">수신된 패킷이 없어요</div>
         </div>
       </div>
 
@@ -745,7 +745,7 @@
     </div>
     <div class="form-row">
       <label>DEVICE ID <span class="required">*</span></label>
-      <input id="fDeviceId" placeholder="ID는 6자리입니다" maxlength="6" style="font-family:'JetBrains Mono',monospace;">
+      <input id="fDeviceId" placeholder="ID는 6자리예요" maxlength="6" style="font-family:'JetBrains Mono',monospace;">
     </div>
     <div class="form-row">
       <label>IP 주소</label>
@@ -782,15 +782,15 @@
 <div class="modal-bg" id="certModal">
   <div class="modal cert-modal">
     <h3>🔒 HTTPS 인증서 설치</h3>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:4px;">이 인증서를 설치하면 브라우저 보안 경고가 사라져요.<br>접속하는 <b>모든 PC에서 한 번씩</b> 설치해야 해요.</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:4px;">이 인증서를 설치하면 브라우저 보안 경고가 사라져요.<br>접속하는 <b>모든 PC에서 한 번씩</b> 설치해 주세요.</p>
     <div class="cert-steps">
       <div class="cert-step"><div class="cert-step-num">1</div><div class="cert-step-text">아래 버튼으로 인증서 파일을 받아 주세요.</div></div>
       <div class="cert-step"><div class="cert-step-num">2</div><div class="cert-step-text">받은 <code>DeviceManager-CA.crt</code> 파일을 <b>더블클릭</b>해 주세요.</div></div>
-      <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text"><b>인증서 설치</b> → <b>로컬 컴퓨터</b> → <b>모든 인증서를 다음 저장소에 저장</b> → <b>찾아보기</b> → <b>신뢰할 수 있는 루트 인증 기관</b> 선택 → <b>확인 → 다음 → 마침</b></div></div>
-      <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 닫았다가</b> 다시 열고 접속해 주세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text"><b>인증서 설치</b> → <b>로컬 컴퓨터</b> → <b>모든 인증서를 다음 저장소에 저장</b> → <b>찾아보기</b> → <b>신뢰할 수 있는 루트 인증 기관</b> 선택 → <b>확인 → 다음 → 마침</b>을 해 주세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 닫았다가</b> 다시 열고 연결해 주세요.</div></div>
     </div>
     <button class="cert-dl-btn" onclick="downloadCert()">⬇ 인증서 다운로드 (DeviceManager-CA.crt)</button>
-    <div class="cert-note">Firefox 사용자는 브라우저 설정 → 인증서 보기 → 인증 기관 → 가져오기에서 별도 설치가 필요해요.</div>
+    <div class="cert-note">Firefox 사용자는 브라우저 설정 → 인증서 보기 → 인증 기관 → 가져오기에서 별도로 설치해 주세요.</div>
     <div class="modal-btns" style="margin-top:16px;">
       <button class="btn-cancel" onclick="document.getElementById('certModal').classList.remove('show')">닫기</button>
     </div>
@@ -862,7 +862,7 @@
       <div class="log-col-header">
         <span>시각</span><span class="col-name">장비명</span><span class="col-id">ID</span><span>유형</span><span>요약</span><span></span>
       </div>
-      <div id="logSearchEmpty" class="log-empty">검색 결과가 없습니다</div>
+      <div id="logSearchEmpty" class="log-empty">검색 결과가 없어요</div>
       <div id="logSearchRows"></div>
     </div>
     <div class="log-pager" id="logPager"></div>
@@ -929,7 +929,7 @@
 <div class="modal-bg" id="onboardingModal">
   <div class="modal onboarding-modal">
     <h3>🚀 시작 가이드</h3>
-    <p class="onboarding-desc">처음 사용하시나요? 아래 항목을 순서대로 확인해 주세요.</p>
+    <p class="onboarding-desc">처음 사용하시나요? 아래 항목을 순서대로 살펴봐 주세요.</p>
     <div id="onboardingList"></div>
     <div class="modal-btns" style="justify-content:space-between;margin-top:18px;">
       <button class="btn-cancel" onclick="dismissOnboarding()">다시 보지 않을게요</button>
@@ -941,7 +941,7 @@
   <div class="modal db-modal">
     <h3>🗄️ DB 설정</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
-      MariaDB 연결 정보를 입력해 주세요. 저장하면 바로 재연결을 시도해요.
+      MariaDB 연결 정보를 입력해 주세요. 저장하면 바로 다시 연결해요.
     </p>
     <div class="form-row">
       <label>호스트</label>

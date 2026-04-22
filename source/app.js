@@ -15,7 +15,7 @@ const pendingChannels = new Map(); // deviceId → Map(chIndex → {target,cmd,t
 let currentUser = null; // { username, role }
 let dbConnected  = false; // DB 연결 상태
 
-const LINK_LABEL = { ok:'연결됨', timeout:'타임아웃', disconnected:'연결 해제', never:'미연결' };
+const LINK_LABEL = { ok:'연결됨', timeout:'타임아웃', disconnected:'연결 끊김', never:'미연결' };
 
 // ─── 드래그 리사이즈 (마우스 + 터치 지원) ───────────────
 (function(){
@@ -167,7 +167,7 @@ function setPending(deviceId, ch, cmd) {
     pendingChannels.get(deviceId).delete(ch);
     if (pendingChannels.get(deviceId).size === 0) pendingChannels.delete(deviceId);
     const chName = typeof ch === 'string' ? ch : `CH${parseInt(ch)+1}`;
-    addAlarm('timeout', deviceId, `${chName} ${cmd} 명령 — 30초 이내 응답이 없어요. 전송이 제대로 되지 않은 것 같아요.`);
+    addAlarm('timeout', deviceId, `${chName} ${cmd} 명령 — 30초 이내 응답이 없어요. 전송이 제대로 안 된 것 같아요.`);
     if (selectedId === deviceId) renderCtrl();
   }, 30000);
   devMap.set(ch, { target, cmd, timer });
@@ -225,7 +225,7 @@ function connectWS() {
       document.getElementById('wsDot').classList.remove('on');
       document.getElementById('wsStatus').textContent = '연결 중';
       showLoginOverlay();
-      document.getElementById('loginErr').textContent = msg.reason || '세션이 끝났어요.';
+      document.getElementById('loginErr').textContent = msg.reason || '세션이 만료됐어요.';
       return;
     }
     const dev = devices.find(d => d.deviceId===msg.deviceId);
@@ -267,7 +267,7 @@ function connectWS() {
       addPacketLog('disconnect', msg.deviceId, 'DISCONNECTED', { summary:'연결 해제' });
       addAlarm('disconnect', msg.deviceId, '장비 연결이 끊겼어요.');
     } else if (msg.type==='RESTORE_DONE') {
-      showAlert('설정을 복원했어요. 페이지를 새로 고침해요.', 'success');
+      showAlert('설정을 복원했어요. 페이지를 새로 고침할게요.', 'success');
       setTimeout(() => location.reload(), 1500);
       return;
     } else if (msg.type==='DEVICE_ADDED') {
@@ -791,7 +791,7 @@ let dbLogEntries = []; // DB에서 조회한 로그 (검색 모달용)
 
 function openLogSearch() {
   if (!dbConnected) {
-    showAlert('DB가 연결되어 있지 않아요.\n설정 메뉴 > DB 설정에서 연결 정보를 입력해 주세요.', 'warn');
+    showAlert('DB가 연결돼 있지 않아요.\n설정 메뉴 > DB 설정에서 연결 정보를 입력해 주세요.', 'warn');
     return;
   }
   document.getElementById('logSearchModal').classList.add('show');
@@ -1148,7 +1148,7 @@ async function openUserModal() {
       <span class="user-role-badge ${u.role}">${u.role === 'admin' ? '관리자' : '일반'}</span>
       <div class="user-row-btns">
         <button class="btn-user-edit" onclick="openUserEditModal('edit','${u.username}','${u.role}')">수정</button>
-        <button class="btn-user-del" onclick="deleteUser('${u.username}')" ${isSelf?'disabled title="자신의 계정은 삭제할 수 없습니다."':''}>삭제</button>
+        <button class="btn-user-del" onclick="deleteUser('${u.username}')" ${isSelf?'disabled title="자신의 계정은 삭제할 수 없어요."':''}>삭제</button>
       </div>`;
     list.appendChild(row);
   });
@@ -1226,7 +1226,7 @@ function renderOnboardingItems() {
       icon: dbConnected ? '✅' : '❌',
       cls: dbConnected ? 'done' : 'todo',
       title: 'DB 연결',
-      sub: dbConnected ? 'MariaDB가 연결돼 있어요.' : '로그 기록을 위해 MariaDB 연결 정보를 설정해 주세요.',
+      sub: dbConnected ? 'MariaDB가 연결돼 있어요.' : '로그 기록을 위해 MariaDB 연결 정보를 입력해 주세요.',
       btnLabel: 'DB 설정 열기',
       btnAction: () => { closeOnboarding(); openDbConfigModal(); }
     },
@@ -1343,7 +1343,7 @@ async function openDbConfigModal() {
     document.getElementById('dbDatabase').value = cfg.database || '';
     if (resultEl) {
       resultEl.className   = 'db-conn-result ' + (cfg.connected ? 'ok' : 'err');
-      resultEl.textContent = cfg.connected ? '✅ 현재 DB 연결됨' : '❌ 현재 DB 미연결 상태입니다';
+      resultEl.textContent = cfg.connected ? '✅ 현재 DB 연결됨' : '❌ 현재 DB 미연결 상태예요';
     }
   } catch(e) {}
   document.getElementById('dbConfigModal').classList.add('show');
@@ -1380,7 +1380,7 @@ async function saveDbConfig() {
     dbConnected = !!data.connected;
     updateDbUI();
   } catch(e) {
-    if (resultEl) { resultEl.className = 'db-conn-result err'; resultEl.textContent = '❌ 서버와 통신하지 못했어요'; }
+    if (resultEl) { resultEl.className = 'db-conn-result err'; resultEl.textContent = '❌ 서버와 통신하지 못했어요.'; }
   }
   btn.disabled = false; btn.textContent = '저장 및 연결';
 }
@@ -1414,7 +1414,7 @@ async function handleRestoreFile(input) {
       });
       const result = await res.json();
       if (!res.ok) return showAlert(result.error || '복원하지 못했어요.', 'error');
-      showAlert('복원했어요. 페이지를 새로 고침해요.', 'success');
+      showAlert('복원했어요. 페이지를 새로 고침할게요.', 'success');
       setTimeout(() => location.reload(), 1500);
     } catch(e) {
       showAlert('파일을 읽지 못했어요. 올바른 백업 파일인지 확인해 주세요.', 'error');
