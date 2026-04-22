@@ -463,13 +463,13 @@
     .ws-badge { display: none; }
     .port-wrap input { width: 44px; }
   }
-  /* ── 대시보드 요약 카드 */
-  .summary-bar{display:flex;gap:10px;padding:10px 14px 0;flex-shrink:0;}
-  .summary-card{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;box-shadow:var(--shadow);}
-  .summary-label{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;}
-  .summary-value{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text);line-height:1.2;}
-  .summary-card.connected .summary-value{color:var(--green);}
-  .summary-card.on-ch .summary-value{color:var(--blue);}
+  /* ── 대시보드 요약 바 */
+  .summary-bar{display:flex;align-items:center;gap:0;padding:6px 14px;border-top:1px solid var(--border);flex-shrink:0;}
+  .summary-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3);}
+  .summary-item+.summary-item::before{content:'·';margin:0 8px;color:var(--border);}
+  .summary-item .s-val{font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text);font-size:12px;}
+  .summary-item.connected .s-val{color:var(--green);}
+  .summary-item.on-ch .s-val{color:var(--blue);}
 
   ::-webkit-scrollbar{width:5px;}
   ::-webkit-scrollbar-track{background:transparent;}
@@ -679,6 +679,11 @@
           </div>
         </div>
       </div>
+      <div class="summary-bar">
+        <div class="summary-item"><span>전체 장비</span><span class="s-val" id="summaryTotal">0</span></div>
+        <div class="summary-item connected"><span>연결 중</span><span class="s-val" id="summaryConnected">0</span></div>
+        <div class="summary-item on-ch"><span>켜진 채널</span><span class="s-val" id="summaryOnChannels">0</span></div>
+      </div>
       <div class="alarm-resize" id="alarmResize"></div>
       <div class="alarm-panel">
         <div class="alarm-header">
@@ -694,20 +699,6 @@
     </div>
     <!-- 오른쪽: 장비목록 + 로그 -->
     <div class="right-col">
-      <div class="summary-bar">
-        <div class="summary-card">
-          <span class="summary-label">전체 장비</span>
-          <span class="summary-value" id="summaryTotal">0</span>
-        </div>
-        <div class="summary-card connected">
-          <span class="summary-label">연결 중</span>
-          <span class="summary-value" id="summaryConnected">0</span>
-        </div>
-        <div class="summary-card on-ch">
-          <span class="summary-label">켜진 채널</span>
-          <span class="summary-value" id="summaryOnChannels">0</span>
-        </div>
-      </div>
       <div class="list-panel">
         <div class="list-toolbar">
           <span><span class="abbr-l">장비 목록</span><span class="abbr-ms">목록</span></span>
