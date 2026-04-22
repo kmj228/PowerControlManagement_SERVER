@@ -37,11 +37,6 @@ if %DB_FOUND%==0 (
     echo        호스트  : localhost
     echo        포트    : 3306
     echo        아이디  : root  (또는 생성한 계정)
-    echo        비밀번호: 설치 시 지정한 Root 비밀번호
-    echo        DB명    : 원하는 데이터베이스 이름 입력
-    echo.
-    echo   * 아이디/비밀번호가 기억나지 않으면:
-    echo     MariaDB를 재설치하거나 root 비밀번호를 초기화하세요.
     echo.
     pause
     echo 서버를 계속 시작합니다...
