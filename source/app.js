@@ -1055,6 +1055,8 @@ function showLoginOverlay() {
   document.getElementById('loginOverlay').classList.remove('hidden');
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = false; btn.textContent = '로그인';
   document.getElementById('loginErr').textContent = '';
   setTimeout(() => document.getElementById('loginUser').focus(), 100);
 }
