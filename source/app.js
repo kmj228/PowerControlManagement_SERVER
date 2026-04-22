@@ -513,7 +513,7 @@ function doLogoutQuiet() {
   document.getElementById('wsDot').classList.remove('on');
   document.getElementById('wsStatus').textContent = '연결 중';
   showLoginOverlay();
-  showAlert('세션이 만료됐어요. 다시 로그인해 주세요.', 'warn');
+  showAlert('세션이 만료됐어요.\n다시 로그인해 주세요.', 'warn');
 }
 
 // ─── 필터 ─────────────────────────────────
@@ -751,7 +751,7 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal();
 async function changeTCPPort() {
   const val = document.getElementById('tcpPort').value.trim();
   const port = parseInt(val);
-  if (!port || port < 1 || port > 65535) return showAlert('올바른 포트 번호를 입력해 주세요. (1 ~ 65535)','warn');
+  if (!port || port < 1 || port > 65535) return showAlert('올바른 포트 번호를 입력해 주세요.\n1 ~ 65535 사이로 입력해 주세요.','warn');
   showConfirm(`TCP 포트를 ${port}번으로 바꿀까요?\n기존 연결된 장비들이 재연결돼요.`, async function() {
     try {
       const res = await fetch('/api/config', {
@@ -1417,7 +1417,7 @@ async function handleRestoreFile(input) {
       showAlert('복원했어요. 페이지를 새로 고침할게요.', 'success');
       setTimeout(() => location.reload(), 1500);
     } catch(e) {
-      showAlert('파일을 읽지 못했어요. 올바른 백업 파일인지 확인해 주세요.', 'error');
+      showAlert('파일을 읽지 못했어요.\n올바른 백업 파일인지 확인해 주세요.', 'error');
     }
   });
 }

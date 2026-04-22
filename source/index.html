@@ -284,7 +284,7 @@
   /* 커스텀 alert */
   .alert-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;width:340px;box-shadow:var(--shadow-md);text-align:center;}
   .alert-icon-wrap{font-size:28px;margin-bottom:10px;}
-  .alert-msg{font-size:14px;font-weight:500;margin-bottom:20px;line-height:1.6;color:var(--text);}
+  .alert-msg{font-size:14px;font-weight:500;margin-bottom:20px;line-height:1.6;color:var(--text);white-space:pre-line;}
   .alert-btns{display:flex;justify-content:center;gap:8px;}
   .btn-alert-ok{padding:8px 28px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;}
   .btn-alert-ok:hover{background:var(--blue-dark);}
@@ -371,6 +371,7 @@
 
   /* 900px: 텍스트 축약 시작, 레이아웃 압축 */
   @media (max-width: 900px) {
+    .btn-cert { display: none; }
     .two-col { grid-template-columns: clamp(270px, 32%, 340px) 1fr; }
     .log-title-prefix { display: none; }
     .col-name { display: none; }
@@ -427,6 +428,10 @@
     .bulk-bar-label { font-size: 10px; }
     .btn-bulk { font-size: 10px; }
     .modal { width: calc(100vw - 24px); padding: 16px; }
+    .s-lbl-full { display: none; }
+    .s-lbl-short { display: inline; }
+    .summary-item+.summary-item::before { margin: 0 5px; }
+    .summary-bar { padding: 5px 10px; }
   }
 
   /* 600px: 로그 필터 숨김, 최소화 */
@@ -470,6 +475,8 @@
   .summary-item .s-val{font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text);font-size:12px;}
   .summary-item.connected .s-val{color:var(--green);}
   .summary-item.on-ch .s-val{color:var(--blue);}
+  .s-lbl-full{display:inline;}
+  .s-lbl-short{display:none;}
 
   ::-webkit-scrollbar{width:5px;}
   ::-webkit-scrollbar-track{background:transparent;}
@@ -608,7 +615,7 @@
 <header>
   <div class="header-left">
     <img src="logo_ci.png" class="header-logo" alt="" onerror="this.style.display='none'">
-    <h1>전원 제어 장치</h1>
+    <h1><span class="abbr-l">전원 제어 장치</span><span class="abbr-ms">장치 관리</span></h1>
   </div>
   <div class="header-right">
     <div class="ws-badge"><div class="ws-dot" id="wsDot"></div><span id="wsStatus">연결 중</span></div>
@@ -639,7 +646,7 @@
         </div>
       </div>
       <button class="btn-cert" onclick="document.getElementById('certModal').classList.add('show')">인증서 설치</button>
-      <button class="btn-logout" onclick="doLogout()">로그아웃</button>
+      <button class="btn-logout" onclick="doLogout()"><span class="abbr-l">로그아웃</span><span class="abbr-ms">나가기</span></button>
     </div>
   </div>
 </header>
@@ -680,9 +687,9 @@
         </div>
       </div>
       <div class="summary-bar">
-        <div class="summary-item"><span>전체 장비</span><span class="s-val" id="summaryTotal">0</span></div>
-        <div class="summary-item connected"><span>연결 중</span><span class="s-val" id="summaryConnected">0</span></div>
-        <div class="summary-item on-ch"><span>켜진 채널</span><span class="s-val" id="summaryOnChannels">0</span></div>
+        <div class="summary-item"><span><span class="s-lbl-full">전체 장비</span><span class="s-lbl-short">장비</span></span><span class="s-val" id="summaryTotal">0</span></div>
+        <div class="summary-item connected"><span><span class="s-lbl-full">연결 중</span><span class="s-lbl-short">연결</span></span><span class="s-val" id="summaryConnected">0</span></div>
+        <div class="summary-item on-ch"><span><span class="s-lbl-full">켜진 채널</span><span class="s-lbl-short">ON</span></span><span class="s-val" id="summaryOnChannels">0</span></div>
       </div>
       <div class="alarm-resize" id="alarmResize"></div>
       <div class="alarm-panel">
@@ -720,10 +727,10 @@
             <div class="log-filter-sep"></div>
             <button class="log-filter-btn conn   active" onclick="toggleFilter('connect',this)">연결</button>
             <button class="log-filter-btn disc   active" onclick="toggleFilter('disconnect',this)">해제</button>
-            <button class="log-filter-btn to     active" onclick="toggleFilter('timeout',this)">타임아웃</button>
+            <button class="log-filter-btn to     active" onclick="toggleFilter('timeout',this)"><span class="abbr-l">타임아웃</span><span class="abbr-ms">T/O</span></button>
           </div>
           <div style="margin-left:auto;display:flex;align-items:center;gap:5px;">
-            <button class="log-action-btn" id="logSearchBtn" onclick="openLogSearch()">로그 검색</button>
+            <button class="log-action-btn" id="logSearchBtn" onclick="openLogSearch()"><span class="abbr-l">로그 검색</span><span class="abbr-ms">검색</span></button>
             <span id="logNoDbNote" style="font-size:11px;color:var(--red);display:none;">DB 없음</span>
             <button class="btn-panel-toggle" id="logToggle" onclick="toggleLogPanel()" title="접기">▼</button>
           </div>
@@ -786,7 +793,14 @@
     <div class="cert-steps">
       <div class="cert-step"><div class="cert-step-num">1</div><div class="cert-step-text">아래 버튼으로 인증서 파일을 받아 주세요.</div></div>
       <div class="cert-step"><div class="cert-step-num">2</div><div class="cert-step-text">받은 <code>DeviceManager-CA.crt</code> 파일을 <b>더블클릭</b>해 주세요.</div></div>
-      <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text"><b>인증서 설치</b> → <b>로컬 컴퓨터</b> → <b>모든 인증서를 다음 저장소에 저장</b> → <b>찾아보기</b> → <b>신뢰할 수 있는 루트 인증 기관</b> 선택 → <b>확인 → 다음 → 마침</b>을 해 주세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text">
+        <b>인증서 설치</b> →
+        <b>로컬 컴퓨터</b> →
+        <b>모든 인증서를 다음 저장소에 저장</b> →
+        <b>찾아보기</b> →<br>
+        <b>신뢰할 수 있는 루트 인증 기관</b> 선택 →
+        <b>확인</b> → <b>다음</b> → <b>마침</b>
+      </div></div>
       <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 닫았다가</b> 다시 열고 연결해 주세요.</div></div>
     </div>
     <button class="cert-dl-btn" onclick="downloadCert()">⬇ 인증서 다운로드 (DeviceManager-CA.crt)</button>
