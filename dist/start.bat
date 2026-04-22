@@ -38,9 +38,6 @@ if %DB_FOUND%==0 (
     echo        포트    : 3306
     echo        아이디  : root  (또는 생성한 계정)
     echo.
-    pause
-    echo 서버를 계속 시작합니다...
-    echo.
 )
 
 :: 서버 시작
