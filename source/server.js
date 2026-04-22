@@ -20,7 +20,14 @@ const CONFIG_FILE  = path.join(DATA_DIR, 'data', 'config.json');
 const LOG_DIR      = path.join(DATA_DIR, 'data', 'log');
 const CERT_FILE    = path.join(DATA_DIR, 'data', 'cert.pem');
 const KEY_FILE     = path.join(DATA_DIR, 'data', 'key.pem');
-const TIMEOUT_MS   = 13 * 1000; // STATUS 10초 주기 + 여유 3초
+const TIMEOUT_MS        = 13 * 1000; // STATUS 10초 주기 + 여유 3초
+const STATUS_INTERVAL_MS = 10 * 1000; // 장비 STATUS 전송 주기
+const MAX_TIMEOUT_COUNT  = 3;         // 연속 타임아웃 허용 횟수
+const SESSION_EXPIRE_MS  = 24 * 60 * 60 * 1000; // 세션 유효 시간 (24시간)
+const BULK_CMD_DELAY_MS  = 80;        // 일괄 명령 채널 간 딜레이
+const PENDING_TIMEOUT_MS = 30 * 1000; // 채널 명령 응답 대기 시간
+const LOG_QUERY_LIMIT    = 200;       // 로그 조회 최대 건수
+const WS_CLOSE_DELAY_MS  = 500;      // 서버 종료 전 응답 전송 대기
 const DB_CONFIG_FILE = path.join(DATA_DIR !== __dirname ? DATA_DIR : path.dirname(process.execPath || __dirname), 'data', 'db.json');
 const LOG_KEEP_DAYS = 5;
 
@@ -83,7 +90,6 @@ function saveUsers() {
 // 세션 관리
 // ──────────────────────────────────────────
 const sessions = new Map(); // token → { username, role, createdAt }
-const SESSION_TTL = 24 * 60 * 60 * 1000; // 24시간
 
 function createSession(username, role) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -96,7 +102,7 @@ function getSession(req) {
   if (!match) return null;
   const sess = sessions.get(match[1]);
   if (!sess) return null;
-  if (Date.now() - sess.createdAt > SESSION_TTL) { sessions.delete(match[1]); return null; }
+  if (Date.now() - sess.createdAt > SESSION_EXPIRE_MS) { sessions.delete(match[1]); return null; }
   return sess;
 }
 function requireAuth(req, res) {
@@ -287,7 +293,7 @@ function calcLinkState(lastUpdate) {
 // ──────────────────────────────────────────
 const tcpClients = new Map();
 const timeoutTimers = new Map();
-const timeoutCounts = new Map(); // 연속 타임아웃 횟수
+const timeoutCounts = new Map();
 let tcpServerInstance = null;
 
 function handleConnection(socket) {
@@ -328,7 +334,7 @@ function handleConnection(socket) {
         clog('← 상태', deviceId, chStr, raw);
         const dev = getDevices().find(d => d.deviceId === deviceId);
         if (dev) { dev.channels=parsed.channels; dev.currents=parsed.currents; dev.lastUpdate=now; dev.ip=ip; persistDevices(); }
-        timeoutCounts.set(deviceId, 0); // 상태 수신 시 타임아웃 카운트 초기화
+        timeoutCounts.set(deviceId, 0);
         resetTimeoutTimer(deviceId);
         broadcastToWeb({ type:'STATUS', deviceId, channels:parsed.channels, currents:parsed.currents, lastUpdate:now, linkState:'ok', raw });
         appendLog(logEntry('status', deviceId, 'STATUS', chStr, null, raw));
@@ -360,19 +366,17 @@ function resetTimeoutTimer(deviceId) {
   const t = setTimeout(() => {
     const count = (timeoutCounts.get(deviceId) || 0) + 1;
     timeoutCounts.set(deviceId, count);
-    if (count >= 4) {
-      // 4번째는 타임아웃 로그 없이 바로 해제 처리
-      // 3회 연속 타임아웃 → 연결 해제 처리
-      clog('해제', deviceId, '타임아웃 3회로 연결 해제');
+    if (count > MAX_TIMEOUT_COUNT) {
+      clog('해제', deviceId, `타임아웃 ${MAX_TIMEOUT_COUNT}회로 연결 해제`);
       timeoutCounts.delete(deviceId);
       clearTimeoutTimer(deviceId);
       broadcastToWeb({ type:'DISCONNECTED', deviceId });
-      appendLog(logEntry('disconnect', deviceId, 'DISCONNECTED', '연결 해제 (타임아웃 3회)'));
+      appendLog(logEntry('disconnect', deviceId, 'DISCONNECTED', `연결 해제 (타임아웃 ${MAX_TIMEOUT_COUNT}회)`));
       // 소켓 참조 저장 후 삭제 → close 이벤트에서 중복 처리 방지
       const sock = tcpClients.get(deviceId);
       tcpClients.delete(deviceId);
       if (sock) {
-        sock._handled = true; // close 핸들러에서 중복 방지 플래그
+        sock._handled = true;
         try { sock.destroy(); } catch(e) {}
       }
     } else {
@@ -403,8 +407,6 @@ function restartTCPServer(newPort, cb) {
   const finish = () => { saveConfig({ ...loadConfig(), tcpPort: newPort }); startTCPServer(newPort); if (cb) cb(); };
   if (tcpServerInstance) { tcpServerInstance.close(finish); tcpServerInstance = null; } else finish();
 }
-
-// TCP 서버는 DB 초기화 후 시작 (appendLog가 dbPool 필요)
 
 // ──────────────────────────────────────────
 // WebSocket
@@ -488,7 +490,7 @@ async function requestHandler(req, res) {
           if (s.username === username) {
             sessions.delete(token);
             // 기존 접속자에게 강제 로그아웃 신호
-            broadcastToUser(username, { type:'FORCE_LOGOUT', reason:'다른 곳에서 로그인하여 연결이 종료되었습니다.' });
+            broadcastToUser(username, { type:'FORCE_LOGOUT', reason:'다른 곳에서 로그인해서 연결이 끊겼어요.' });
           }
         }
         const token = createSession(username, user.role);
@@ -741,6 +743,49 @@ async function requestHandler(req, res) {
     }); return;
   }
 
+  // ── 백업
+  if (url === '/api/backup' && method === 'GET') {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const devicesData = fs.existsSync(DEVICES_FILE) ? JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8')) : [];
+      const configData  = fs.existsSync(CONFIG_FILE)  ? JSON.parse(fs.readFileSync(CONFIG_FILE,  'utf8')) : {};
+      const backup = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), devices: devicesData, config: configData }, null, 2);
+      const today = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="backup_${today}.json"`
+      });
+      return res.end(backup);
+    } catch(e) {
+      res.writeHead(500, {'Content-Type':'application/json'});
+      return res.end(JSON.stringify({error:'백업 파일을 만들지 못했어요.'}));
+    }
+  }
+
+  // ── 복원
+  if (url === '/api/restore' && method === 'POST') {
+    if (!requireAdmin(req, res)) return;
+    let body = ''; req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        if (data.version !== 1) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'지원하지 않는 백업 버전이에요.'})); }
+        if (!Array.isArray(data.devices)) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'devices 필드가 올바르지 않아요.'})); }
+        if (typeof data.config !== 'object' || data.config === null) { res.writeHead(400, {'Content-Type':'application/json'}); return res.end(JSON.stringify({error:'config 필드가 올바르지 않아요.'})); }
+        fs.writeFileSync(DEVICES_FILE, JSON.stringify(data.devices, null, 2), 'utf8');
+        fs.writeFileSync(CONFIG_FILE,  JSON.stringify(data.config,  null, 2), 'utf8');
+        devicesCache = data.devices;
+        TCP_PORT = data.config.tcpPort || TCP_PORT_DEFAULT;
+        broadcastToWeb({ type: 'RESTORE_DONE' });
+        res.writeHead(200, {'Content-Type':'application/json'});
+        return res.end(JSON.stringify({ok:true}));
+      } catch(e) {
+        res.writeHead(400, {'Content-Type':'application/json'});
+        return res.end(JSON.stringify({error:'복원 파일을 읽지 못했어요. 올바른 백업 파일인지 확인해 주세요.'}));
+      }
+    }); return;
+  }
+
   // ── 서버 종료
   if (url === '/api/shutdown' && method === 'POST') {
     if (!requireAdmin(req, res)) return;
@@ -748,7 +793,7 @@ async function requestHandler(req, res) {
     console.log('[서버 종료] 브라우저 요청으로 종료');
     try { fs.writeFileSync(path.join(DATA_DIR, 'data', '.shutdown'), '', 'utf8'); } catch(e) {}
     appendServerLog('stop', '서버 종료 (브라우저 요청)');
-    setTimeout(() => process.exit(0), 500);
+    setTimeout(() => process.exit(0), WS_CLOSE_DELAY_MS);
     return;
   }
 
@@ -797,7 +842,7 @@ async function requestHandler(req, res) {
           users[idx].passwordHash = hash; users[idx].salt = salt;
           // 비밀번호 변경 시 해당 사용자 세션 만료 + 강제 로그아웃
           for (const [token, s] of sessions.entries()) { if (s.username === targetUser) sessions.delete(token); }
-          broadcastToUser(targetUser, { type:'FORCE_LOGOUT', reason:'관리자에 의해 비밀번호가 변경되었습니다. 다시 로그인해 주세요.' });
+          broadcastToUser(targetUser, { type:'FORCE_LOGOUT', reason:'관리자가 비밀번호를 바꿨어요. 다시 로그인해 주세요.' });
         }
         if (role) users[idx].role = role;
         saveUsers();
@@ -1102,7 +1147,7 @@ function appendServerLog(event, summary) {
 // 프로세스 종료 시 로그
 function onProcessExit(signal) {
   appendServerLog('stop', `서버 종료 (${signal})`);
-  setTimeout(() => process.exit(0), 500);
+  setTimeout(() => process.exit(0), WS_CLOSE_DELAY_MS);
 }
 process.on('SIGINT',  () => onProcessExit('SIGINT'));
 process.on('SIGTERM', () => onProcessExit('SIGTERM'));

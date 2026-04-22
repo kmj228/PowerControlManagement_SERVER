@@ -463,6 +463,14 @@
     .ws-badge { display: none; }
     .port-wrap input { width: 44px; }
   }
+  /* ── 대시보드 요약 카드 */
+  .summary-bar{display:flex;gap:10px;padding:10px 14px 0;flex-shrink:0;}
+  .summary-card{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;box-shadow:var(--shadow);}
+  .summary-label{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;}
+  .summary-value{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--text);line-height:1.2;}
+  .summary-card.connected .summary-value{color:var(--green);}
+  .summary-card.on-ch .summary-value{color:var(--blue);}
+
   ::-webkit-scrollbar{width:5px;}
   ::-webkit-scrollbar-track{background:transparent;}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
@@ -624,6 +632,9 @@
           <div class="settings-divider"></div>
           <button class="settings-menu-item" onclick="openUserModal();closeSettingsMenu()">사용자 관리</button>
           <div class="settings-divider"></div>
+          <button class="settings-menu-item" onclick="downloadBackup();closeSettingsMenu()">백업 다운로드</button>
+          <button class="settings-menu-item" onclick="triggerRestoreFile();closeSettingsMenu()">백업에서 복원</button>
+          <div class="settings-divider"></div>
           <button class="settings-menu-item danger" onclick="confirmShutdown();closeSettingsMenu()">서버 종료</button>
         </div>
       </div>
@@ -641,7 +652,7 @@
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8M12 8v8"/>
           </svg>
-          <span>장비를 선택하세요</span>
+          <span>장비를 선택해 주세요</span>
         </div>
         <div id="ctrlContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
           <div class="ctrl-header">
@@ -683,6 +694,20 @@
     </div>
     <!-- 오른쪽: 장비목록 + 로그 -->
     <div class="right-col">
+      <div class="summary-bar">
+        <div class="summary-card">
+          <span class="summary-label">전체 장비</span>
+          <span class="summary-value" id="summaryTotal">0</span>
+        </div>
+        <div class="summary-card connected">
+          <span class="summary-label">연결 중</span>
+          <span class="summary-value" id="summaryConnected">0</span>
+        </div>
+        <div class="summary-card on-ch">
+          <span class="summary-label">켜진 채널</span>
+          <span class="summary-value" id="summaryOnChannels">0</span>
+        </div>
+      </div>
       <div class="list-panel">
         <div class="list-toolbar">
           <span><span class="abbr-l">장비 목록</span><span class="abbr-ms">목록</span></span>
@@ -708,7 +733,7 @@
           </div>
           <div style="margin-left:auto;display:flex;align-items:center;gap:5px;">
             <button class="log-action-btn" id="logSearchBtn" onclick="openLogSearch()">로그 검색</button>
-            <span id="logNoDbNote" style="font-size:11px;color:var(--red);display:none;">DB 미연결</span>
+            <span id="logNoDbNote" style="font-size:11px;color:var(--red);display:none;">DB 없음</span>
             <button class="btn-panel-toggle" id="logToggle" onclick="toggleLogPanel()" title="접기">▼</button>
           </div>
         </div>
@@ -725,7 +750,7 @@
     <h3 id="modalTitle">장비 추가</h3>
     <div class="form-row">
       <label>함체 위치명 <span class="required">*</span></label>
-      <input id="fLocationName" placeholder="함체 위치를 작성해 주세요">
+      <input id="fLocationName" placeholder="함체 위치를 입력해 주세요">
     </div>
     <div class="form-row">
       <label>DEVICE ID <span class="required">*</span></label>
@@ -733,11 +758,11 @@
     </div>
     <div class="form-row">
       <label>IP 주소</label>
-      <input id="fIp" placeholder="장비 IP를 입력해 주세요">
+      <input id="fIp" placeholder="장비 IP 주소를 입력해 주세요">
     </div>
     <div class="form-row">
       <label>설치 주소</label>
-      <input id="fAddress" placeholder="설치 위치를 작성해 주세요">
+      <input id="fAddress" placeholder="설치 위치를 입력해 주세요">
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
@@ -766,15 +791,15 @@
 <div class="modal-bg" id="certModal">
   <div class="modal cert-modal">
     <h3>🔒 HTTPS 인증서 설치</h3>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:4px;">이 인증서를 설치하면 브라우저 보안 경고가 사라집니다.<br>접속하는 <b>모든 PC에서 한 번씩</b> 설치해야 합니다.</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:4px;">이 인증서를 설치하면 브라우저 보안 경고가 사라져요.<br>접속하는 <b>모든 PC에서 한 번씩</b> 설치해야 해요.</p>
     <div class="cert-steps">
-      <div class="cert-step"><div class="cert-step-num">1</div><div class="cert-step-text">아래 버튼으로 인증서 파일을 다운로드하세요.</div></div>
-      <div class="cert-step"><div class="cert-step-num">2</div><div class="cert-step-text">다운로드된 <code>DeviceManager-CA.crt</code> 파일을 <b>더블클릭</b>하세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">1</div><div class="cert-step-text">아래 버튼으로 인증서 파일을 받아 주세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">2</div><div class="cert-step-text">받은 <code>DeviceManager-CA.crt</code> 파일을 <b>더블클릭</b>해 주세요.</div></div>
       <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text"><b>인증서 설치</b> → <b>로컬 컴퓨터</b> → <b>모든 인증서를 다음 저장소에 저장</b> → <b>찾아보기</b> → <b>신뢰할 수 있는 루트 인증 기관</b> 선택 → <b>확인 → 다음 → 마침</b></div></div>
-      <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 종료</b>했다가 다시 열고 접속하세요.</div></div>
+      <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 닫았다가</b> 다시 열고 접속해 주세요.</div></div>
     </div>
     <button class="cert-dl-btn" onclick="downloadCert()">⬇ 인증서 다운로드 (DeviceManager-CA.crt)</button>
-    <div class="cert-note">Firefox 사용자는 브라우저 설정 → 인증서 보기 → 인증 기관 → 가져오기에서 별도 설치가 필요합니다.</div>
+    <div class="cert-note">Firefox 사용자는 브라우저 설정 → 인증서 보기 → 인증 기관 → 가져오기에서 별도 설치가 필요해요.</div>
     <div class="modal-btns" style="margin-top:16px;">
       <button class="btn-cancel" onclick="document.getElementById('certModal').classList.remove('show')">닫기</button>
     </div>
@@ -858,7 +883,7 @@
   <div class="login-card">
     <img src="logo_ci.png" class="login-logo" alt="" onerror="this.style.display='none'">
     <h2 class="login-title">전원 제어 장치</h2>
-    <p class="login-sub">로그인하여 계속하세요</p>
+    <p class="login-sub">로그인해 주세요</p>
     <div class="login-form">
       <input id="loginUser" type="text" placeholder="아이디" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
       <input id="loginPass" type="password" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -875,7 +900,7 @@
     <div class="user-list" id="userList"></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeUserModal()">닫기</button>
-      <button class="btn-primary" onclick="openUserEditModal('add')">+ 사용자 추가</button>
+      <button class="btn-primary" onclick="openUserEditModal('add')">+ 사용자 추가하기</button>
     </div>
   </div>
 </div>
@@ -886,11 +911,11 @@
     <h3 id="userEditTitle">사용자 추가</h3>
     <div class="form-row">
       <label>아이디 <span class="required">*</span></label>
-      <input id="fUserUsername" placeholder="아이디 (2~32자)">
+      <input id="fUserUsername" placeholder="2~32자로 입력해 주세요">
     </div>
     <div class="form-row">
       <label id="fUserPwLabel">비밀번호 <span class="required">*</span></label>
-      <input id="fUserPassword" type="password" placeholder="비밀번호 (4자 이상)">
+      <input id="fUserPassword" type="password" placeholder="4자 이상 입력해 주세요">
       <div class="form-hint" id="fUserPwHint"></div>
     </div>
     <div class="form-row">
@@ -906,6 +931,7 @@
     </div>
   </div>
 </div>
+<input type="file" id="restoreFileInput" accept=".json" style="display:none" onchange="handleRestoreFile(this)">
 <script src="app.js"></script>
 
 <!-- ── 온보딩 가이드 모달 -->
@@ -915,7 +941,7 @@
     <p class="onboarding-desc">처음 사용하시나요? 아래 항목을 순서대로 확인해 주세요.</p>
     <div id="onboardingList"></div>
     <div class="modal-btns" style="justify-content:space-between;margin-top:18px;">
-      <button class="btn-cancel" onclick="dismissOnboarding()">다시 보지 않기</button>
+      <button class="btn-cancel" onclick="dismissOnboarding()">다시 보지 않을게요</button>
       <button class="btn-primary" onclick="closeOnboarding()">닫기</button>
     </div>
   </div>
@@ -924,7 +950,7 @@
   <div class="modal db-modal">
     <h3>🗄️ DB 설정</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6;">
-      MariaDB 접속 정보를 입력하세요. 저장하면 즉시 재연결을 시도합니다.
+      MariaDB 연결 정보를 입력해 주세요. 저장하면 바로 재연결을 시도해요.
     </p>
     <div class="form-row">
       <label>호스트</label>
@@ -940,7 +966,7 @@
     </div>
     <div class="form-row">
       <label>비밀번호</label>
-      <input id="dbPassword" type="password" placeholder="(비어있으면 변경 안 함)">
+      <input id="dbPassword" type="password" placeholder="(비워두면 기존 비밀번호 유지)">
     </div>
     <div class="form-row">
       <label>데이터베이스</label>

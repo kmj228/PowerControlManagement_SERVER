@@ -140,7 +140,7 @@ function renderAlarms() {
 function deleteAllAlarms() {
   if (!alarmEntries.length) return;
   const cnt = alarmEntries.length;
-  showConfirm(`알림 ${cnt}건을 모두 삭제하시겠습니까?`, function() {
+  showConfirm(`알림 ${cnt}건을 모두 삭제할까요?`, function() {
     alarmEntries = [];
     renderAlarms();
   });
@@ -149,7 +149,7 @@ function deleteAllAlarms() {
 function deleteAlarm(idx) {
   const a = alarmEntries[idx];
   if (!a) return;
-  showConfirm(`이 알림을 삭제하시겠습니까?\n\n${a.msg}`, function() {
+  showConfirm(`이 알림을 삭제할까요?\n\n${a.msg}`, function() {
     alarmEntries.splice(idx, 1);
     renderAlarms();
   });
@@ -167,7 +167,7 @@ function setPending(deviceId, ch, cmd) {
     pendingChannels.get(deviceId).delete(ch);
     if (pendingChannels.get(deviceId).size === 0) pendingChannels.delete(deviceId);
     const chName = typeof ch === 'string' ? ch : `CH${parseInt(ch)+1}`;
-    addAlarm('timeout', deviceId, `${chName} ${cmd} 명령 — 30초 이내 응답 없음. 전송이 제대로 이루어지지 않은 것 같습니다.`);
+    addAlarm('timeout', deviceId, `${chName} ${cmd} 명령 — 30초 이내 응답이 없어요. 전송이 제대로 되지 않은 것 같아요.`);
     if (selectedId === deviceId) renderCtrl();
   }, 30000);
   devMap.set(ch, { target, cmd, timer });
@@ -194,7 +194,7 @@ function connectWS() {
       const oldDev = devices.find(d => d.deviceId===msg.oldId);
       const newDev = devices.find(d => d.deviceId===msg.newId);
       if (newDev) { newDev.linkState = 'never'; renderCard(newDev); }
-      if (msg.wasConnected) addAlarm('disconnect', msg.newId, '장비 연결이 해제되었습니다.');
+      if (msg.wasConnected) addAlarm('disconnect', msg.newId, '장비 연결이 끊겼어요.');
       return;
     }
     if (msg.type==='INIT') {
@@ -225,13 +225,13 @@ function connectWS() {
       document.getElementById('wsDot').classList.remove('on');
       document.getElementById('wsStatus').textContent = '연결 중';
       showLoginOverlay();
-      document.getElementById('loginErr').textContent = msg.reason || '세션이 종료되었습니다.';
+      document.getElementById('loginErr').textContent = msg.reason || '세션이 끝났어요.';
       return;
     }
     const dev = devices.find(d => d.deviceId===msg.deviceId);
     if (msg.type==='STATUS') {
       if(dev) Object.assign(dev, {channels:msg.channels,currents:msg.currents,lastUpdate:msg.lastUpdate,linkState:'ok'});
-      // 각 채널 pending 중 target state 도달한 것만 해제
+      updateSummaryCards();
       const devMap = pendingChannels.get(msg.deviceId);
       if (devMap) {
         msg.channels.forEach((val, i) => {
@@ -251,18 +251,25 @@ function connectWS() {
       addPacketLog('fwver', msg.deviceId, 'FWVER', msg);
     } else if (msg.type==='CONNECT') {
       if(dev) dev.linkState='ok';
-      addAlarm('connect', msg.deviceId, '장비가 연결되었습니다.');
+      updateSummaryCards();
+      addAlarm('connect', msg.deviceId, '장비가 연결됐어요.');
       addPacketLog('connect', msg.deviceId, 'CONNECT', { summary:'연결됨' });
     } else if (msg.type==='TIMEOUT') {
       if(dev) dev.linkState='timeout';
+      updateSummaryCards();
       pendingChannels.delete(msg.deviceId);
       const countStr = msg.count ? `${msg.count}회 연속` : '';
       addPacketLog('timeout', msg.deviceId, 'TIMEOUT', { summary:`응답 없음 ${countStr}` });
     } else if (msg.type==='DISCONNECTED') {
       if(dev) dev.linkState = dev.lastUpdate ? 'disconnected' : 'never';
+      updateSummaryCards();
       pendingChannels.delete(msg.deviceId);
       addPacketLog('disconnect', msg.deviceId, 'DISCONNECTED', { summary:'연결 해제' });
-      addAlarm('disconnect', msg.deviceId, '장비 연결이 해제되었습니다.');
+      addAlarm('disconnect', msg.deviceId, '장비 연결이 끊겼어요.');
+    } else if (msg.type==='RESTORE_DONE') {
+      showAlert('설정을 복원했어요. 페이지를 새로 고침해요.', 'success');
+      setTimeout(() => location.reload(), 1500);
+      return;
     } else if (msg.type==='DEVICE_ADDED') {
       if (!devices.find(d => d.deviceId === msg.device.deviceId)) {
         devices.push(msg.device);
@@ -370,12 +377,29 @@ function multitapSVG(channels, linkState, pendMap) {
 }
 
 
+// ─── 대시보드 요약 카드 ───────────────────
+function updateSummaryCards() {
+  const total = devices.length;
+  const connected = devices.filter(d => d.linkState === 'ok').length;
+  const onChannels = devices.reduce((sum, d) => {
+    if (!d.channels) return sum;
+    return sum + d.channels.filter(v => v === 1).length;
+  }, 0);
+  const elTotal = document.getElementById('summaryTotal');
+  const elConn  = document.getElementById('summaryConnected');
+  const elCh    = document.getElementById('summaryOnChannels');
+  if (elTotal) elTotal.textContent = total;
+  if (elConn)  elConn.textContent  = connected;
+  if (elCh)    elCh.textContent    = onChannels;
+}
+
 // ─── 장비 목록 ────────────────────────────
 function renderList() {
   const c = document.getElementById('deviceList');
   c.innerHTML = '';
-  if (!devices.length) { c.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">등록된 장비가 없습니다.<br>추가 버튼으로 등록해 주세요.</div>`; return; }
+  if (!devices.length) { c.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">등록된 장비가 없어요.<br>추가 버튼으로 등록해 주세요.</div>`; return; }
   devices.forEach(dev => c.appendChild(buildCard(dev)));
+  updateSummaryCards();
 }
 function buildCard(dev) {
   const div = document.createElement('div');
@@ -466,16 +490,17 @@ async function sendBulk(cmd) {
   if(!dev||dev.linkState!=='ok') return;
   [0,1,2,3].forEach(ch => setPending(selectedId, ch, cmd));
   renderCtrl();
-  for(let ch=0;ch<4;ch++) { await postControl(selectedId,ch,cmd); await new Promise(r=>setTimeout(r,80)); }
+  const BULK_DELAY_MS = 80; // 일괄 명령 채널 간 딜레이
+  for(let ch=0;ch<4;ch++) { await postControl(selectedId,ch,cmd); await new Promise(r=>setTimeout(r,BULK_DELAY_MS)); }
 }
 async function postControl(deviceId, ch, cmd) {
   try {
     const res=await fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ch,cmd})});
     if(res.status===401) { doLogoutQuiet(); return null; }
     const data=await res.json();
-    if(!res.ok) { showAlert(data.error||'명령 전송에 실패했습니다.','error'); return null; }
+    if(!res.ok) { showAlert(data.error||'명령을 전송하지 못했어요.','error'); return null; }
     return data;
-  } catch { showAlert('서버 통신 오류가 발생했습니다.','error'); return null; }
+  } catch { showAlert('서버와 통신하지 못했어요.','error'); return null; }
 }
 
 function doLogoutQuiet() {
@@ -488,7 +513,7 @@ function doLogoutQuiet() {
   document.getElementById('wsDot').classList.remove('on');
   document.getElementById('wsStatus').textContent = '연결 중';
   showLoginOverlay();
-  showAlert('세션이 만료되었습니다. 다시 로그인해 주세요.', 'warn');
+  showAlert('세션이 만료됐어요. 다시 로그인해 주세요.', 'warn');
 }
 
 // ─── 필터 ─────────────────────────────────
@@ -567,79 +592,70 @@ function summaryText(entry) {
 }
 
 // ─── 상세 보기 ────────────────────────────
-function openDetail(seq) {
-  const entry=logEntries.find(e=>e.seq===seq);
-  if(!entry) return;
-  document.getElementById('detailTitle').textContent=`${entry.time} / ${entry.deviceId} / 로그 상세`;
-  const body=document.getElementById('detailBody');
-  body.innerHTML='';
-  const d=entry.data;
-  const rows=[
-    ['시각',entry.time],['장비 ID',entry.deviceId],['위치명',entry.location||'-'],
-    ['방향',entry.dir==='send'?'송신 (PC → 장비)':'수신 (장비 → PC)'],
-    ['유형',entry.cmdType],
+function renderDetailEntry(entry) {
+  document.getElementById('detailTitle').textContent = `${entry.time} / ${entry.deviceId} / 로그 상세`;
+  const body = document.getElementById('detailBody');
+  body.innerHTML = '';
+  const d = entry.data || {};
+  const rows = [
+    ['시각', entry.time], ['장비 ID', entry.deviceId], ['위치명', entry.location || '-'],
+    ['방향', entry.dir === 'send' ? '송신 (PC → 장비)' : '수신 (장비 → PC)'],
+    ['유형', entry.cmdType],
   ];
-  if(entry.dir==='send' && entry.data?.user) rows.push(['사용자', entry.data.user]);
-  if(entry.cmdType==='STATUS') {
-    const chs=d.channels||[];
+  if (entry.dir === 'send' && (entry.data?.user || d.user)) rows.push(['사용자', entry.data?.user || d.user]);
+  if (entry.cmdType === 'STATUS') {
+    const chs = d.channels || [];
     rows.push(['채널 상태', chs.map((v,i)=>`<span class="detail-ch ${v===1?'on':'off'}">CH${i+1} ${v===1?'ON':'OFF'}</span>`).join('')]);
-  } else if(['ON','OFF','RESET'].includes(entry.cmdType)) {
-    rows.push(['대상 채널',`CH${parseInt(d.ch)+1}`]);
-    rows.push(['명령',entry.cmdType]);
-  } else if(entry.cmdType==='FWVER') {
-    rows.push(['버전',d.fwVer]);
+  } else if (['ON','OFF','RESET'].includes(entry.cmdType)) {
+    if (d.ch !== undefined) rows.push(['대상 채널', `CH${parseInt(d.ch)+1}`]);
+    rows.push(['명령', entry.cmdType]);
+  } else if (entry.cmdType === 'FWVER') {
+    rows.push(['버전', d.fwVer]);
   }
-  rows.forEach(([label,value])=>{
-    const row=document.createElement('div');
-    row.className='detail-row';
-    const isMono=['장비 ID'].includes(label);
-    if(label==='채널 상태') {
-      row.innerHTML=`<span class="detail-label">${label}</span><div class="detail-channels">${value}</div>`;
+  rows.forEach(([label, value]) => {
+    const row = document.createElement('div');
+    row.className = 'detail-row';
+    const isMono = ['장비 ID'].includes(label);
+    if (label === '채널 상태') {
+      row.innerHTML = `<span class="detail-label">${label}</span><div class="detail-channels">${value}</div>`;
     } else {
-      row.innerHTML=`<span class="detail-label">${label}</span><span class="detail-value${isMono?' mono':''}">${value}</span>`;
+      row.innerHTML = `<span class="detail-label">${label}</span><span class="detail-value${isMono?' mono':''}">${value}</span>`;
     }
     body.appendChild(row);
   });
-  if(d.raw) body.appendChild(buildHexTable(d.raw, entry.cmdType));
+  if (d.raw) body.appendChild(buildHexTable(d.raw, entry.cmdType));
   document.getElementById('detailModal').classList.add('show');
 }
+
+function openDetail(seq) {
+  const entry = logEntries.find(e => e.seq === seq);
+  if (!entry) return;
+  renderDetailEntry(entry);
+}
+
+function openDetailFromSearch(entry) {
+  renderDetailEntry(entry);
+}
+
 function buildHexTable(raw, cmdType) {
   const bytes = raw.match(/.{1,2}/g) || [];
   const cmd = bytes[8] || '';
 
-  // 패킷 유형별 구조 (설명 없이 색으로만 구분)
-  let sections;
-  if (cmd === 'C6') {
-    sections = [
-      { label:'HEADER',  cls:'hdr', bytes:bytes.slice(0,8)  },
-      { label:'CMD',     cls:'cmd', bytes:bytes.slice(8,9)  },
-      { label:'DATA',    cls:'dat', bytes:bytes.slice(9,17) },
-      { label:'CS',      cls:'cs',  bytes:bytes.slice(17)   },
-    ];
-  } else if (cmd === '22') {
-    sections = [
-      { label:'HEADER',  cls:'hdr', bytes:bytes.slice(0,8)  },
-      { label:'CMD',     cls:'cmd', bytes:bytes.slice(8,9)  },
-      { label:'DATA',    cls:'dat', bytes:bytes.slice(9,17) },
-      { label:'CS',      cls:'cs',  bytes:bytes.slice(17)   },
-    ];
-  } else if (cmd === 'A0') {
-    sections = [
-      { label:'HEADER',  cls:'hdr', bytes:bytes.slice(0,8)  },
-      { label:'CMD',     cls:'cmd', bytes:bytes.slice(8,9)  },
-      { label:'DATA',    cls:'dat', bytes:bytes.slice(9,17) },
-      { label:'CS',      cls:'cs',  bytes:bytes.slice(17)   },
-    ];
-  } else {
-    // A6 상태 응답
-    sections = [
-      { label:'HEADER',  cls:'hdr', bytes:bytes.slice(0,8)  },
-      { label:'CMD',     cls:'cmd', bytes:bytes.slice(8,9)  },
-      { label:'CHANNEL', cls:'dat', bytes:bytes.slice(9,13) },
-      { label:'EXT',     cls:'ext', bytes:bytes.slice(13,17)},
-      { label:'CS',      cls:'cs',  bytes:bytes.slice(17)   },
-    ];
-  }
+  // 패킷 유형별 구조 (색으로만 구분)
+  const sections = cmd === 'A6'
+    ? [
+        { label:'HEADER',  cls:'hdr', bytes:bytes.slice(0,8)  },
+        { label:'CMD',     cls:'cmd', bytes:bytes.slice(8,9)  },
+        { label:'CHANNEL', cls:'dat', bytes:bytes.slice(9,13) },
+        { label:'EXT',     cls:'ext', bytes:bytes.slice(13,17)},
+        { label:'CS',      cls:'cs',  bytes:bytes.slice(17)   },
+      ]
+    : [
+        { label:'HEADER',  cls:'hdr', bytes:bytes.slice(0,8)  },
+        { label:'CMD',     cls:'cmd', bytes:bytes.slice(8,9)  },
+        { label:'DATA',    cls:'dat', bytes:bytes.slice(9,17) },
+        { label:'CS',      cls:'cs',  bytes:bytes.slice(17)   },
+      ];
   const wrap = document.createElement('div');
   const labelRow = document.createElement('div');
   labelRow.className = 'detail-row';
@@ -663,41 +679,6 @@ function buildHexTable(raw, cmdType) {
 }
 function closeDetailModal() { document.getElementById('detailModal').classList.remove('show'); }
 
-function openDetailFromSearch(entry) {
-  // DB 로그는 seq 없이 직접 entry 사용
-  document.getElementById('detailTitle').textContent = `${entry.time} / ${entry.deviceId} / 로그 상세`;
-  const body = document.getElementById('detailBody');
-  body.innerHTML = '';
-  const d = entry.data || {};
-  const rows = [
-    ['시각', entry.time],
-    ['장비 ID', entry.deviceId],
-    ['위치명', entry.location || '-'],
-    ['방향', entry.dir === 'send' ? '송신 (PC → 장비)' : '수신 (장비 → PC)'],
-    ['유형', entry.cmdType],
-  ];
-  if (entry.dir === 'send' && d.user) rows.push(['사용자', d.user]);
-  if (entry.cmdType === 'STATUS') {
-    const chs = d.channels || [];
-    rows.push(['채널 상태', chs.map((v,i)=>`<span class="detail-ch ${v===1?'on':'off'}">CH${i+1} ${v===1?'ON':'OFF'}</span>`).join('')]);
-  } else if (['ON','OFF','RESET'].includes(entry.cmdType)) {
-    rows.push(['명령', entry.cmdType]);
-  }
-  rows.forEach(([label, value]) => {
-    const row = document.createElement('div');
-    row.className = 'detail-row';
-    const isMono = ['장비 ID'].includes(label);
-    if (label === '채널 상태') {
-      row.innerHTML = `<span class="detail-label">${label}</span><div class="detail-channels">${value}</div>`;
-    } else {
-      row.innerHTML = `<span class="detail-label">${label}</span><span class="detail-value${isMono?' mono':''}">${value}</span>`;
-    }
-    body.appendChild(row);
-  });
-  if (d.raw) body.appendChild(buildHexTable(d.raw, entry.cmdType));
-  document.getElementById('detailModal').classList.add('show');
-}
-
 // ─── 모달 ─────────────────────────────────
 function openAddModal() {
   modalMode='add';
@@ -707,7 +688,7 @@ function openAddModal() {
   document.getElementById('fLocationName').focus();
 }
 function openEditModal() {
-  if(!selectedId) return showAlert('수정할 장비를 선택해 주세요.','warn');
+  if(!selectedId) return showAlert('수정할 장비를 선택해 주세요.', 'warn');
   const dev=devices.find(d=>d.deviceId===selectedId);
   if(!dev) return;
   modalMode='edit';
@@ -731,13 +712,13 @@ async function submitModal() {
   if(modalMode==='add') {
     const res=await fetch('/api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address})});
     const data=await res.json();
-    if(!res.ok) return showAlert(data.error||'추가에 실패했습니다.','error');
+    if(!res.ok) return showAlert(data.error||'장비를 추가하지 못했어요.','error');
     devices.push({deviceId,ip,locationName,address,channels:[-1,-1,-1,-1],currents:[0,0,0,0],fwVer:'',lastUpdate:'',linkState:'never'});
     renderList();
   } else {
     const res=await fetch(`/api/devices/${selectedId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address})});
     const data=await res.json();
-    if(!res.ok) return showAlert(data.error||'수정에 실패했습니다.','error');
+    if(!res.ok) return showAlert(data.error||'장비를 수정하지 못했어요.','error');
     const dev=devices.find(d=>d.deviceId===selectedId);
     if(dev) {
       if(dev.deviceId!==deviceId) {
@@ -755,9 +736,9 @@ async function submitModal() {
 async function deleteDevice() {
   if(!selectedId) return showAlert('삭제할 장비를 선택해 주세요.','warn');
   const dev=devices.find(d=>d.deviceId===selectedId);
-  showConfirm(`[${dev?.locationName||selectedId}] 장비를 삭제하시겠습니까?`, async function() {
+  showConfirm(`[${dev?.locationName||selectedId}] 장비를 삭제할까요?`, async function() {
     const res=await fetch(`/api/devices/${selectedId}`,{method:'DELETE'});
-    if(!res.ok) return showAlert('삭제에 실패했습니다.','error');
+    if(!res.ok) return showAlert('장비를 삭제하지 못했어요.','error');
     devices=devices.filter(d=>d.deviceId!==selectedId);
     selectedId=null; renderList();
     document.getElementById('ctrlEmpty').style.display='flex';
@@ -770,17 +751,17 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal();
 async function changeTCPPort() {
   const val = document.getElementById('tcpPort').value.trim();
   const port = parseInt(val);
-  if (!port || port < 1 || port > 65535) return showAlert('유효한 포트 번호를 입력해 주세요. (1 ~ 65535)','warn');
-  showConfirm(`TCP 포트를 ${port}번으로 변경하시겠습니까?\n기존 연결된 장비들이 재연결됩니다.`, async function() {
+  if (!port || port < 1 || port > 65535) return showAlert('올바른 포트 번호를 입력해 주세요. (1 ~ 65535)','warn');
+  showConfirm(`TCP 포트를 ${port}번으로 바꿀까요?\n기존 연결된 장비들이 재연결돼요.`, async function() {
     try {
       const res = await fetch('/api/config', {
         method: 'PUT', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ tcpPort: port })
       });
       const data = await res.json();
-      if (!res.ok) return showAlert(data.error || '포트 변경에 실패했습니다.', 'error');
-      showAlert(`TCP 포트가 ${data.port}번으로 변경되었습니다.`, 'success');
-    } catch { showAlert('서버 통신 오류가 발생했습니다.', 'error'); }
+      if (!res.ok) return showAlert(data.error || '포트를 바꾸지 못했어요.', 'error');
+      showAlert(`TCP 포트를 ${data.port}번으로 바꿨어요.`, 'success');
+    } catch { showAlert('서버와 통신하지 못했어요.', 'error'); }
   });
 }
 // 초기 높이 동기화 (로그·알림 동일 height)
@@ -810,7 +791,7 @@ let dbLogEntries = []; // DB에서 조회한 로그 (검색 모달용)
 
 function openLogSearch() {
   if (!dbConnected) {
-    showAlert('DB가 연결되어 있지 않습니다.\n설정 메뉴 > DB 설정에서 접속 정보를 입력해 주세요.', 'warn');
+    showAlert('DB가 연결되어 있지 않아요.\n설정 메뉴 > DB 설정에서 연결 정보를 입력해 주세요.', 'warn');
     return;
   }
   document.getElementById('logSearchModal').classList.add('show');
@@ -846,7 +827,7 @@ async function fetchLogs(page) {
     }));
     renderSearchLog();
     renderLogPager();
-  } catch(e) { console.error('로그 조회 오류', e); }
+  } catch(e) { /* 로그 조회 실패 — 무시 */ }
   logLoading = false;
 }
 
@@ -946,16 +927,16 @@ function renderLogPager() {
 }
 
 async function deleteAllLogs() {
-  showConfirm(`DB의 모든 로그 ${logTotal.toLocaleString()}건이 삭제됩니다.\n계속하시겠습니까?`, async function() {
+  showConfirm(`DB의 모든 로그 ${logTotal.toLocaleString()}건을 삭제할까요?`, async function() {
     try {
       const res = await fetch('/api/logs/all', { method:'DELETE' });
       const d = await res.json();
       if (d.ok) {
         logEntries = []; logTotal = 0; logPage = 1;
         renderLog(); renderLogPager();
-        showAlert(`로그 ${d.deleted.toLocaleString()}건이 삭제되었습니다.`, 'success');
-      } else { showAlert('삭제에 실패했습니다.', 'error'); }
-    } catch { showAlert('서버 통신 오류가 발생했습니다.', 'error'); }
+        showAlert(`로그 ${d.deleted.toLocaleString()}건을 삭제했어요.`, 'success');
+      } else { showAlert('로그를 삭제하지 못했어요.', 'error'); }
+    } catch { showAlert('서버와 통신하지 못했어요.', 'error'); }
   });
 }
 
@@ -1035,13 +1016,11 @@ function exportLogsCSV() {
 
 // ─── 서버 종료 ─────────────────────────────────────────
 function confirmShutdown() {
-  showConfirm('서버를 종료하시겠습니까?\n브라우저 창도 함께 닫힙니다.', async function() {
+  showConfirm('서버를 종료할까요?\n브라우저 창도 함께 닫혀요.', async function() {
     try { await fetch('/api/shutdown', { method:'POST' }); } catch(e) {}
     setTimeout(() => window.close(), 400);
   });
 }
-
-// 서버 종료는 /api/shutdown API로 처리
 
 // ─── 패널 접기/펼치기 ──────────────────────────────────
 function toggleAlarmPanel() {
@@ -1095,19 +1074,19 @@ async function doLogin() {
   try {
     const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
     const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || '로그인에 실패했습니다.'; btn.disabled=false; btn.textContent='로그인'; return; }
+    if (!res.ok) { errEl.textContent = data.error || '로그인하지 못했어요.'; btn.disabled=false; btn.textContent='로그인'; return; }
     currentUser = { username: data.username, role: data.role };
     applyUserRole();
     hideLoginOverlay();
     connectWS();
   } catch {
-    errEl.textContent = '서버에 연결할 수 없습니다.';
+    errEl.textContent = '서버에 연결하지 못했어요.';
     btn.disabled = false; btn.textContent = '로그인';
   }
 }
 
 async function doLogout() {
-  showConfirm('로그아웃 하시겠습니까?', async function() {
+  showConfirm('로그아웃 할까요?', async function() {
     try { await fetch('/api/logout', { method:'POST' }); } catch(e) {}
     currentUser = null;
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
@@ -1156,7 +1135,7 @@ async function openUserModal() {
   const users = await res.json();
   const list = document.getElementById('userList');
   list.innerHTML = '';
-  if (!users.length) { list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">사용자가 없습니다.</div>'; }
+  if (!users.length) { list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">사용자가 없어요.</div>'; }
   users.forEach(u => {
     const row = document.createElement('div');
     row.className = 'user-row';
@@ -1203,28 +1182,28 @@ async function submitUserModal() {
     if (!password) return showAlert('비밀번호를 입력해 주세요.', 'warn');
     const res = await fetch('/api/users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password, role}) });
     const data = await res.json();
-    if (!res.ok) return showAlert(data.error || '추가에 실패했습니다.', 'error');
+    if (!res.ok) return showAlert(data.error || '계정을 추가하지 못했어요.', 'error');
     closeUserEditModal();
     closeUserModal();
-    showAlert(`[${username}] 계정이 추가되었습니다.`, 'success');
+    showAlert(`[${username}] 계정을 추가했어요.`, 'success');
   } else {
     const body = { role };
     if (password) body.password = password;
     const res = await fetch(`/api/users/${encodeURIComponent(userEditTarget)}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
     const data = await res.json();
-    if (!res.ok) return showAlert(data.error || '수정에 실패했습니다.', 'error');
+    if (!res.ok) return showAlert(data.error || '정보를 수정하지 못했어요.', 'error');
     closeUserEditModal();
     closeUserModal();
-    showAlert(password ? `[${userEditTarget}] 비밀번호가 변경되었습니다.` : `[${userEditTarget}] 정보가 수정되었습니다.`, 'success');
+    showAlert(password ? `[${userEditTarget}] 비밀번호를 바꿨어요.` : `[${userEditTarget}] 정보를 수정했어요.`, 'success');
   }
 }
 
 async function deleteUser(username) {
-  showConfirm(`[${username}] 계정을 삭제하시겠습니까?`, async function() {
+  showConfirm(`[${username}] 계정을 삭제할까요?`, async function() {
     const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { method:'DELETE' });
     const data = await res.json();
-    if (!res.ok) return showAlert(data.error || '삭제에 실패했습니다.', 'error');
-    showAlert(`[${username}] 계정이 삭제되었습니다.`, 'success');
+    if (!res.ok) return showAlert(data.error || '계정을 삭제하지 못했어요.', 'error');
+    showAlert(`[${username}] 계정을 삭제했어요.`, 'success');
     openUserModal();
   });
 }
@@ -1247,7 +1226,7 @@ function renderOnboardingItems() {
       icon: dbConnected ? '✅' : '❌',
       cls: dbConnected ? 'done' : 'todo',
       title: 'DB 연결',
-      sub: dbConnected ? 'MariaDB가 연결되어 있습니다.' : '로그 기록을 위해 MariaDB 접속 정보를 설정해 주세요.',
+      sub: dbConnected ? 'MariaDB가 연결돼 있어요.' : '로그 기록을 위해 MariaDB 연결 정보를 설정해 주세요.',
       btnLabel: 'DB 설정 열기',
       btnAction: () => { closeOnboarding(); openDbConfigModal(); }
     },
@@ -1256,7 +1235,7 @@ function renderOnboardingItems() {
       icon: devices.length > 0 ? '✅' : '❌',
       cls: devices.length > 0 ? 'done' : 'todo',
       title: '장비 등록',
-      sub: devices.length > 0 ? `장비 ${devices.length}대가 등록되어 있습니다.` : '제어할 장비를 1개 이상 등록해 주세요.',
+      sub: devices.length > 0 ? `장비 ${devices.length}대가 등록돼 있어요.` : '제어할 장비를 1개 이상 등록해 주세요.',
       btnLabel: '장비 추가',
       btnAction: () => { closeOnboarding(); openAddModal(); }
     },
@@ -1265,7 +1244,7 @@ function renderOnboardingItems() {
       icon: certDone ? '✅' : '🔒',
       cls: certDone ? 'done' : 'optional',
       title: 'HTTPS 인증서 설치 (권장)',
-      sub: certDone ? '이 브라우저에 인증서를 설치했습니다.' : '브라우저 보안 경고를 없애려면 인증서를 설치하세요.',
+      sub: certDone ? '이 브라우저에 인증서를 설치했어요.' : '브라우저 보안 경고를 없애려면 인증서를 설치하세요.',
       btnLabel: '설치 안내 보기',
       btnAction: () => { closeOnboarding(); document.getElementById('certModal').classList.add('show'); }
     },
@@ -1341,10 +1320,10 @@ function updateDbUI() {
     if (noDbNote)  noDbNote.style.display = 'none';
   } else {
     badge.className = 'db-badge db-err';
-    badge.title = 'DB 미연결 — 설정 > DB 설정에서 접속 정보를 입력하세요';
+    badge.title = 'DB 미연결 — 설정 > DB 설정에서 연결 정보를 입력해 주세요';
     if (text) text.textContent = 'DB 없음';
-    if (searchBtn) { searchBtn.disabled = true;  searchBtn.title = 'DB가 연결되어야 사용할 수 있습니다'; }
-    if (csvBtn)    { csvBtn.disabled    = true;  csvBtn.title    = 'DB가 연결되어야 사용할 수 있습니다'; }
+    if (searchBtn) { searchBtn.disabled = true;  searchBtn.title = 'DB를 연결해야 사용할 수 있어요'; }
+    if (csvBtn)    { csvBtn.disabled    = true;  csvBtn.title    = 'DB를 연결해야 사용할 수 있어요'; }
     if (noDbNote)  noDbNote.style.display = 'inline';
   }
 }
@@ -1392,18 +1371,55 @@ async function saveDbConfig() {
     if (resultEl) {
       if (data.connected) {
         resultEl.className   = 'db-conn-result ok';
-        resultEl.textContent = '✅ DB 연결 성공!';
+        resultEl.textContent = '✅ DB에 연결했어요!';
       } else {
         resultEl.className   = 'db-conn-result err';
-        resultEl.textContent = '❌ 연결 실패 — 접속 정보를 확인해 주세요';
+        resultEl.textContent = '❌ 연결하지 못했어요 — 연결 정보를 확인해 주세요';
       }
     }
     dbConnected = !!data.connected;
     updateDbUI();
   } catch(e) {
-    if (resultEl) { resultEl.className = 'db-conn-result err'; resultEl.textContent = '❌ 서버 통신 오류'; }
+    if (resultEl) { resultEl.className = 'db-conn-result err'; resultEl.textContent = '❌ 서버와 통신하지 못했어요'; }
   }
   btn.disabled = false; btn.textContent = '저장 및 연결';
+}
+
+// ─── 백업 / 복원 ──────────────────────────────────────
+function downloadBackup() {
+  const a = document.createElement('a');
+  a.href = '/api/backup';
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function triggerRestoreFile() {
+  document.getElementById('restoreFileInput').click();
+}
+
+async function handleRestoreFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  showConfirm('지금 설정을 백업 파일로 덮어쓸게요. 계속할까요?', async function() {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const res = await fetch('/api/restore', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      if (!res.ok) return showAlert(result.error || '복원하지 못했어요.', 'error');
+      showAlert('복원했어요. 페이지를 새로 고침해요.', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } catch(e) {
+      showAlert('파일을 읽지 못했어요. 올바른 백업 파일인지 확인해 주세요.', 'error');
+    }
+  });
 }
 
 // ─── 설정 드롭다운 ────────────────────────────────────
