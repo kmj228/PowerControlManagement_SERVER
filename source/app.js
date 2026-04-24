@@ -1,6 +1,7 @@
 // ─── 상태 ────────────────────────────────
 let devices    = [];
 let selectedId = null;
+let multiSelected = new Set(); // 다중 선택된 deviceId 집합
 let modalMode  = 'add';
 let ws         = null;
 let logEntries = [];
@@ -168,7 +169,7 @@ function setPending(deviceId, ch, cmd) {
     if (pendingChannels.get(deviceId).size === 0) pendingChannels.delete(deviceId);
     const chName = typeof ch === 'string' ? ch : `CH${parseInt(ch)+1}`;
     addAlarm('timeout', deviceId, `${chName} ${cmd} 명령 — 30초 이내 응답이 없어요. 전송이 제대로 안 된 것 같아요.`);
-    if (selectedId === deviceId) renderCtrl();
+    if (selectedId === deviceId) renderCtrlPanel();
   }, 30000);
   devMap.set(ch, { target, cmd, timer });
   // 카드 즉시 업데이트
@@ -184,7 +185,7 @@ function connectWS() {
     document.getElementById('wsDot').classList.remove('on');
     document.getElementById('wsStatus').textContent='연결 끊김';
     devices.forEach(dev => { dev.linkState='timeout'; renderCard(dev); });
-    if(selectedId) renderCtrl();
+    if(selectedId) renderCtrlPanel();
     setTimeout(connectWS,2000);
   };
   ws.onmessage = e => {
@@ -198,7 +199,7 @@ function connectWS() {
       return;
     }
     if (msg.type==='INIT') {
-      devices=msg.devices; renderList(); if(selectedId) renderCtrl();
+      devices=msg.devices; renderList(); if(selectedId||multiSelected.size>0) renderCtrlPanel();
       if (msg.tcpPort) document.getElementById('tcpPort').value = msg.tcpPort;
       if (msg.username && !currentUser) { currentUser={username:msg.username,role:msg.role}; applyUserRole(); }
       if (msg.dbConnected !== undefined) { dbConnected = msg.dbConnected; updateDbUI(); }
@@ -218,10 +219,11 @@ function connectWS() {
     if (msg.type==='FORCE_LOGOUT') {
       currentUser = null;
       if (ws) { ws.onclose = null; ws.close(); ws = null; }
-      devices = []; selectedId = null; logEntries = []; alarmEntries = [];
+      devices = []; selectedId = null; multiSelected.clear(); logEntries = []; alarmEntries = [];
       renderList(); renderAlarms(); renderLog();
       document.getElementById('ctrlEmpty').style.display = 'flex';
       document.getElementById('ctrlContent').style.display = 'none';
+      document.getElementById('multiCtrlContent').style.display = 'none';
       document.getElementById('wsDot').classList.remove('on');
       document.getElementById('wsStatus').textContent = '연결 중';
       showLoginOverlay();
@@ -281,17 +283,21 @@ function connectWS() {
       if (idx !== -1) {
         devices[idx] = { ...devices[idx], ...msg.device };
         renderList();
-        if (selectedId === msg.device.deviceId) renderCtrl();
+        if (selectedId === msg.device.deviceId) renderCtrlPanel();
+        else if (multiSelected.has(msg.device.deviceId)) renderMultiCtrl();
       }
       return;
     } else if (msg.type==='DEVICE_DELETED') {
       devices = devices.filter(d => d.deviceId !== msg.deviceId);
+      multiSelected.delete(msg.deviceId);
       if (selectedId === msg.deviceId) {
         selectedId = null;
         document.getElementById('ctrlEmpty').style.display = 'flex';
         document.getElementById('ctrlContent').style.display = 'none';
+        document.getElementById('multiCtrlContent').style.display = 'none';
       }
       renderList();
+      if (multiSelected.size > 0) renderMultiCtrl();
       return;
     } else if (msg.type==='DEVICE_REORDERED') {
       const map = new Map(devices.map(d => [d.deviceId, d]));
@@ -300,7 +306,11 @@ function connectWS() {
       if (selectedId) { const el = document.getElementById('card-'+selectedId); if(el) el.classList.add('selected'); }
       return;
     }
-    if(dev) { renderCard(dev); if(selectedId===msg.deviceId) renderCtrl(); }
+    if(dev) {
+      renderCard(dev);
+      if(selectedId===msg.deviceId) renderCtrlPanel();
+      else if(multiSelected.has(msg.deviceId)) renderMultiCtrl();
+    }
   };
 }
 
@@ -403,15 +413,19 @@ function renderList() {
 }
 function buildCard(dev) {
   const div = document.createElement('div');
-  div.className = 'device-card'+(dev.deviceId===selectedId?' selected':'');
+  const isMultiSel = multiSelected.has(dev.deviceId);
+  div.className = 'device-card'+(dev.deviceId===selectedId?' selected':'')+(isMultiSel?' multi-selected':'');
   div.id = `card-${dev.deviceId}`;
+  div.style.position = 'relative';
   div.onclick = () => selectDevice(dev.deviceId);
   div.innerHTML = cardHTML(dev);
   return div;
 }
 function cardHTML(dev) {
   const link = dev.linkState||'never';
+  const isMultiSel = multiSelected.has(dev.deviceId);
   return `
+    <input type="checkbox" class="card-check" ${isMultiSel?'checked':''} onclick="event.stopPropagation();toggleMultiSelect('${dev.deviceId}')" title="다중 선택">
     <div class="card-layout">
       <div class="card-left">
         <div class="card-top">
@@ -429,7 +443,11 @@ function cardHTML(dev) {
 }
 function renderCard(dev) {
   const el = document.getElementById(`card-${dev.deviceId}`);
-  if (el) el.innerHTML = cardHTML(dev);
+  if (!el) return;
+  const isMultiSel = multiSelected.has(dev.deviceId);
+  // multi-selected 클래스 동기화
+  el.classList.toggle('multi-selected', isMultiSel);
+  el.innerHTML = cardHTML(dev);
 }
 
 // ─── 제어 패널 ────────────────────────────
@@ -438,13 +456,74 @@ function selectDevice(id) {
   document.querySelectorAll('.device-card').forEach(c=>c.classList.remove('selected'));
   const card = document.getElementById(`card-${id}`);
   if(card) card.classList.add('selected');
-  renderCtrl();
+  renderCtrlPanel();
+}
+
+function toggleMultiSelect(deviceId) {
+  if (multiSelected.has(deviceId)) {
+    multiSelected.delete(deviceId);
+  } else {
+    multiSelected.add(deviceId);
+  }
+  renderList();       // 카드 체크 상태 반영
+  renderCtrlPanel();  // 왼쪽 패널 전환
+}
+
+function clearMultiSelect() {
+  multiSelected.clear();
+  renderList();
+  renderCtrlPanel();
+}
+
+function renderCtrlPanel() {
+  if (multiSelected.size > 0) {
+    renderMultiCtrl();
+  } else {
+    renderCtrl();
+  }
+}
+
+function renderMultiCtrl() {
+  document.getElementById('ctrlEmpty').style.display = 'none';
+  document.getElementById('ctrlContent').style.display = 'none';
+  const multiCtrl = document.getElementById('multiCtrlContent');
+  multiCtrl.style.display = 'flex';
+
+  const count = multiSelected.size;
+  document.getElementById('multiCtrlTitle').textContent = `${count}개 장비 선택됨`;
+
+  const listEl = document.getElementById('multiDeviceList');
+  listEl.innerHTML = '';
+  multiSelected.forEach(id => {
+    const dev = devices.find(d => d.deviceId === id);
+    if (!dev) return;
+    const link = dev.linkState || 'never';
+    const item = document.createElement('div');
+    item.className = 'multi-device-item';
+    item.innerHTML = `<span class="card-led ${link}" style="flex-shrink:0;" title="${LINK_LABEL[link]}"></span><span class="multi-device-name">${dev.locationName||'(위치명 없음)'}</span><span class="multi-device-id">${dev.deviceId}</span>`;
+    listEl.appendChild(item);
+  });
+}
+
+async function sendMultiBulk(cmd) {
+  const BULK_DELAY_MS = 80;
+  for (const deviceId of multiSelected) {
+    const dev = devices.find(d => d.deviceId === deviceId);
+    if (!dev || dev.linkState !== 'ok') continue;
+    [0,1,2,3].forEach(ch => setPending(deviceId, ch, cmd));
+    // renderCard는 setPending 내부에서 자동 호출됨
+    for (let ch = 0; ch < 4; ch++) {
+      await postControl(deviceId, ch, cmd);
+      await new Promise(r => setTimeout(r, BULK_DELAY_MS));
+    }
+  }
 }
 function renderCtrl() {
   const dev = devices.find(d=>d.deviceId===selectedId);
   if(!dev) return;
   document.getElementById('ctrlEmpty').style.display='none';
   document.getElementById('ctrlContent').style.display='flex';
+  document.getElementById('multiCtrlContent').style.display='none';
   const link = dev.linkState||'never';
   document.getElementById('ctrlLinkLed').className=`ctrl-link-led ${link}`;
   document.getElementById('ctrlLinkText').className=`ctrl-link-text ${link}`;
@@ -506,10 +585,11 @@ async function postControl(deviceId, ch, cmd) {
 function doLogoutQuiet() {
   currentUser = null;
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
-  devices = []; selectedId = null; logEntries = []; alarmEntries = [];
+  devices = []; selectedId = null; multiSelected.clear(); logEntries = []; alarmEntries = [];
   renderList(); renderAlarms(); renderLog();
   document.getElementById('ctrlEmpty').style.display = 'flex';
   document.getElementById('ctrlContent').style.display = 'none';
+  document.getElementById('multiCtrlContent').style.display = 'none';
   document.getElementById('wsDot').classList.remove('on');
   document.getElementById('wsStatus').textContent = '연결 중';
   showLoginOverlay();
@@ -739,14 +819,22 @@ async function deleteDevice() {
   showConfirm(`[${dev?.locationName||selectedId}] 장비를 삭제할까요?`, async function() {
     const res=await fetch(`/api/devices/${selectedId}`,{method:'DELETE'});
     if(!res.ok) return showAlert('장비를 삭제하지 못했어요.','error');
+    multiSelected.delete(selectedId);
     devices=devices.filter(d=>d.deviceId!==selectedId);
     selectedId=null; renderList();
     document.getElementById('ctrlEmpty').style.display='flex';
     document.getElementById('ctrlContent').style.display='none';
+    document.getElementById('multiCtrlContent').style.display='none';
+    if (multiSelected.size > 0) renderMultiCtrl();
   });
 }
 
-document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal(); closeDetailModal(); closeLogSearch(); document.getElementById('alertModal').classList.remove('show'); } });
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') {
+    closeModal(); closeDetailModal(); closeLogSearch(); document.getElementById('alertModal').classList.remove('show');
+    if (multiSelected.size > 0) { multiSelected.clear(); renderList(); renderCtrlPanel(); }
+  }
+});
 
 async function changeTCPPort() {
   const val = document.getElementById('tcpPort').value.trim();
@@ -977,6 +1065,7 @@ function enableDragReorder() {
     devices.splice(tgtIdx, 0, moved);
     renderList();
     if (selectedId) { const el = document.getElementById('card-' + selectedId); if (el) el.classList.add('selected'); }
+    multiSelected.forEach(id => { const el = document.getElementById('card-' + id); if (el) el.classList.add('multi-selected'); });
     try {
       await fetch('/api/devices/reorder', {
         method:'PUT', headers:{'Content-Type':'application/json'},
@@ -1092,10 +1181,11 @@ async function doLogout() {
     try { await fetch('/api/logout', { method:'POST' }); } catch(e) {}
     currentUser = null;
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
-    devices = []; selectedId = null; logEntries = []; alarmEntries = [];
+    devices = []; selectedId = null; multiSelected.clear(); logEntries = []; alarmEntries = [];
     renderList(); renderAlarms(); renderLog();
     document.getElementById('ctrlEmpty').style.display = 'flex';
     document.getElementById('ctrlContent').style.display = 'none';
+    document.getElementById('multiCtrlContent').style.display = 'none';
     document.getElementById('wsDot').classList.remove('on');
     document.getElementById('wsStatus').textContent = '연결 중';
     showLoginOverlay();
