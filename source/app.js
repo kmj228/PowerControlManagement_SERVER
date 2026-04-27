@@ -220,6 +220,7 @@ function connectWS() {
       currentUser = null;
       if (ws) { ws.onclose = null; ws.close(); ws = null; }
       devices = []; selectedId = null; multiSelected.clear(); logEntries = []; alarmEntries = [];
+      updateMultiCountBadge();
       renderList(); renderAlarms(); renderLog();
       document.getElementById('ctrlEmpty').style.display = 'flex';
       document.getElementById('ctrlContent').style.display = 'none';
@@ -416,7 +417,6 @@ function buildCard(dev) {
   const isMultiSel = multiSelected.has(dev.deviceId);
   div.className = 'device-card'+(dev.deviceId===selectedId?' selected':'')+(isMultiSel?' multi-selected':'');
   div.id = `card-${dev.deviceId}`;
-  div.style.position = 'relative';
   div.onclick = () => selectDevice(dev.deviceId);
   div.innerHTML = cardHTML(dev);
   return div;
@@ -425,8 +425,8 @@ function cardHTML(dev) {
   const link = dev.linkState||'never';
   const isMultiSel = multiSelected.has(dev.deviceId);
   return `
-    <input type="checkbox" class="card-check" ${isMultiSel?'checked':''} onclick="event.stopPropagation();toggleMultiSelect('${dev.deviceId}')" title="다중 선택">
     <div class="card-layout">
+      <div class="card-sel${isMultiSel?' checked':''}" onclick="event.stopPropagation();toggleMultiSelect('${dev.deviceId}')" title="다중 선택에 추가"></div>
       <div class="card-left">
         <div class="card-top">
           <div class="card-led ${link}" title="${LINK_LABEL[link]}"></div>
@@ -452,6 +452,16 @@ function renderCard(dev) {
 
 // ─── 제어 패널 ────────────────────────────
 function selectDevice(id) {
+  // 다중 선택 중이면 해제하고 단일 제어로 전환
+  if (multiSelected.size > 0) {
+    multiSelected.clear();
+    document.querySelectorAll('.device-card.multi-selected').forEach(c => {
+      c.classList.remove('multi-selected');
+      const sel = c.querySelector('.card-sel');
+      if (sel) sel.classList.remove('checked');
+    });
+    updateMultiCountBadge();
+  }
   selectedId = id;
   document.querySelectorAll('.device-card').forEach(c=>c.classList.remove('selected'));
   const card = document.getElementById(`card-${id}`);
@@ -465,14 +475,39 @@ function toggleMultiSelect(deviceId) {
   } else {
     multiSelected.add(deviceId);
   }
-  renderList();       // 카드 체크 상태 반영
+  // 해당 카드만 업데이트 (전체 재빌드 불필요)
+  const card = document.getElementById(`card-${deviceId}`);
+  if (card) {
+    const isSel = multiSelected.has(deviceId);
+    card.classList.toggle('multi-selected', isSel);
+    const sel = card.querySelector('.card-sel');
+    if (sel) sel.classList.toggle('checked', isSel);
+  }
+  updateMultiCountBadge();
   renderCtrlPanel();  // 왼쪽 패널 전환
 }
 
 function clearMultiSelect() {
   multiSelected.clear();
-  renderList();
+  document.querySelectorAll('.device-card.multi-selected').forEach(c => {
+    c.classList.remove('multi-selected');
+    const sel = c.querySelector('.card-sel');
+    if (sel) sel.classList.remove('checked');
+  });
+  updateMultiCountBadge();
   renderCtrlPanel();
+}
+
+function updateMultiCountBadge() {
+  const badge = document.getElementById('multiCountBadge');
+  const text  = document.getElementById('multiCountText');
+  if (!badge || !text) return;
+  if (multiSelected.size > 0) {
+    text.textContent = `${multiSelected.size}개 선택됨`;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
 }
 
 function renderCtrlPanel() {
@@ -490,7 +525,10 @@ function renderMultiCtrl() {
   multiCtrl.style.display = 'flex';
 
   const count = multiSelected.size;
-  document.getElementById('multiCtrlTitle').textContent = `${count}개 장비 선택됨`;
+  const connCount = [...multiSelected].filter(id => devices.find(d => d.deviceId === id)?.linkState === 'ok').length;
+
+  document.getElementById('multiCtrlCount').textContent = `${count}개 선택됨`;
+  document.getElementById('multiCtrlConnected').textContent = connCount > 0 ? `연결됨 ${connCount}개` : '연결된 장비 없음';
 
   const listEl = document.getElementById('multiDeviceList');
   listEl.innerHTML = '';
@@ -500,7 +538,11 @@ function renderMultiCtrl() {
     const link = dev.linkState || 'never';
     const item = document.createElement('div');
     item.className = 'multi-device-item';
-    item.innerHTML = `<span class="card-led ${link}" style="flex-shrink:0;" title="${LINK_LABEL[link]}"></span><span class="multi-device-name">${dev.locationName||'(위치명 없음)'}</span><span class="multi-device-id">${dev.deviceId}</span>`;
+    item.innerHTML = `
+      <span class="card-led ${link}" title="${LINK_LABEL[link]}" style="flex-shrink:0;"></span>
+      <span class="multi-device-name">${dev.locationName||'(위치명 없음)'}</span>
+      <span class="multi-device-id">${dev.deviceId}</span>
+      <span class="multi-device-del" onclick="toggleMultiSelect('${id}')" title="선택 해제">×</span>`;
     listEl.appendChild(item);
   });
 }
@@ -586,6 +628,7 @@ function doLogoutQuiet() {
   currentUser = null;
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
   devices = []; selectedId = null; multiSelected.clear(); logEntries = []; alarmEntries = [];
+  updateMultiCountBadge();
   renderList(); renderAlarms(); renderLog();
   document.getElementById('ctrlEmpty').style.display = 'flex';
   document.getElementById('ctrlContent').style.display = 'none';
@@ -793,8 +836,8 @@ async function submitModal() {
     const res=await fetch('/api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address})});
     const data=await res.json();
     if(!res.ok) return showAlert(data.error||'장비를 추가하지 못했어요.','error');
-    devices.push({deviceId,ip,locationName,address,channels:[-1,-1,-1,-1],currents:[0,0,0,0],fwVer:'',lastUpdate:'',linkState:'never'});
-    renderList();
+    // 로컬 push 없음 — DEVICE_ADDED WebSocket 메시지가 실제 추가를 처리해요.
+    // (로컬에서 먼저 push하면 WS 메시지와 경쟁 조건이 생겨 2개씩 추가돼요)
   } else {
     const res=await fetch(`/api/devices/${selectedId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address})});
     const data=await res.json();
@@ -819,20 +862,14 @@ async function deleteDevice() {
   showConfirm(`[${dev?.locationName||selectedId}] 장비를 삭제할까요?`, async function() {
     const res=await fetch(`/api/devices/${selectedId}`,{method:'DELETE'});
     if(!res.ok) return showAlert('장비를 삭제하지 못했어요.','error');
-    multiSelected.delete(selectedId);
-    devices=devices.filter(d=>d.deviceId!==selectedId);
-    selectedId=null; renderList();
-    document.getElementById('ctrlEmpty').style.display='flex';
-    document.getElementById('ctrlContent').style.display='none';
-    document.getElementById('multiCtrlContent').style.display='none';
-    if (multiSelected.size > 0) renderMultiCtrl();
+    // UI 갱신은 서버가 보내는 DEVICE_DELETED WS 메시지가 처리해요
   });
 }
 
 document.addEventListener('keydown', e => {
   if(e.key==='Escape') {
     closeModal(); closeDetailModal(); closeLogSearch(); document.getElementById('alertModal').classList.remove('show');
-    if (multiSelected.size > 0) { multiSelected.clear(); renderList(); renderCtrlPanel(); }
+    if (multiSelected.size > 0) { clearMultiSelect(); }
   }
 });
 
@@ -1182,6 +1219,7 @@ async function doLogout() {
     currentUser = null;
     if (ws) { ws.onclose = null; ws.close(); ws = null; }
     devices = []; selectedId = null; multiSelected.clear(); logEntries = []; alarmEntries = [];
+    updateMultiCountBadge();
     renderList(); renderAlarms(); renderLog();
     document.getElementById('ctrlEmpty').style.display = 'flex';
     document.getElementById('ctrlContent').style.display = 'none';

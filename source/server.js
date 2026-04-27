@@ -311,6 +311,14 @@ function handleConnection(socket) {
       const raw = packet.toString('hex').toUpperCase();
       if (!deviceId) {
         deviceId = parsed.deviceId;
+        // 미등록 장비 차단 — devices.json에 등록된 장비만 허용
+        const registeredDev = getDevices().find(d => d.deviceId === deviceId);
+        if (!registeredDev) {
+          clog('차단', deviceId, '미등록 장비 — 연결을 허용하지 않아요');
+          socket.removeAllListeners();
+          try { socket.destroy(); } catch(e) {}
+          return;
+        }
         // 같은 장치ID로 이미 연결된 소켓이 있으면 즉시 해제 처리
         const existingSocket = tcpClients.get(deviceId);
         if (existingSocket && existingSocket !== socket) {
@@ -626,7 +634,17 @@ async function requestHandler(req, res) {
   if (url.startsWith('/api/devices/') && method === 'DELETE') {
     if (!requireAdmin(req, res)) return;
     const id = decodeURIComponent(url.split('/')[3]);
-    devicesCache = getDevices().filter(d => d.deviceId!==id); persistDevices();
+    devicesCache = getDevices().filter(d => d.deviceId !== id); persistDevices();
+    // 연결 중인 TCP 소켓이 있으면 즉시 해제
+    const sock = tcpClients.get(id);
+    if (sock) {
+      clearTimeoutTimer(id); timeoutCounts.delete(id);
+      tcpClients.delete(id);
+      sock._handled = true;
+      try { sock.destroy(); } catch(e) {}
+      clog('삭제', id, '장비 삭제로 연결 해제');
+    }
+    broadcastToWeb({ type: 'DEVICE_DELETED', deviceId: id });
     res.writeHead(200,{'Content-Type':'application/json'}); return res.end(JSON.stringify({ok:true}));
   }
 
@@ -1112,21 +1130,11 @@ function startHttpServer(port) {
   httpServer.on('listening', () => {
     const proto = isHttps ? 'https' : 'http';
     console.log('');
-    console.log('─────────────────────────────────────────────────');
-    console.log('  서버가 시작됐어요. 아래 주소로 연결해 주세요.');
-    console.log('─────────────────────────────────────────────────');
-    console.log(`  로컬    : ${proto}://localhost:${port}`);
+    console.log(`  ▶  ${proto}://localhost:${port}`);
     const nets = getNetworkList();
-    if (nets.length === 0) {
-      console.log('  네트워크: (연결된 네트워크 없음)');
-    } else {
-      nets.forEach(({ label, ip }) => {
-        console.log(`  ${label.padEnd(10)}: ${proto}://${ip}:${port}`);
-      });
-    }
-    console.log('─────────────────────────────────────────────────');
-    console.log('  데이터  : ' + DATA_DIR + path.sep + 'data' + path.sep);
-    console.log('─────────────────────────────────────────────────');
+    nets.forEach(({ label, ip }) => {
+      console.log(`     ${proto}://${ip}:${port}  (${label})`);
+    });
     console.log('');
   });
   httpServer.on('error', (e) => {
@@ -1149,7 +1157,14 @@ function onProcessExit(signal) {
   appendServerLog('stop', `서버 종료 (${signal})`);
   setTimeout(() => process.exit(0), WS_CLOSE_DELAY_MS);
 }
-process.on('SIGINT',  () => onProcessExit('SIGINT'));
+
+let sigintPending = false;
+process.on('SIGINT', () => {
+  if (sigintPending) return; // 중복 신호 무시
+  sigintPending = true;
+  process.stdout.write('\n서버를 종료해요.\n');
+  onProcessExit('SIGINT');
+});
 process.on('SIGTERM', () => onProcessExit('SIGTERM'));
 
 initDB().then(() => {

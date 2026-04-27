@@ -41,8 +41,4 @@ if %DB_FOUND%==0 (
 )
 
 :: 서버 시작
-echo 서버를 시작합니다...
-echo 브라우저에서 https://localhost:3000 으로 접속하세요.
-echo 종료하려면 이 창을 닫으세요.
-echo.
 "%~dp0DeviceManager.exe"
