@@ -8,7 +8,7 @@ let logEntries = [];
 let logSeq     = 0;
 let logTotal   = 0;
 let logPage    = 1;
-let logFilters = { deviceId:'', dir:'', user:'', keyword:'', dateFrom:'', dateTo:'' };
+let logFilters = { deviceId:'', locationName:'', dir:'', user:'', keyword:'', dateFrom:'', dateTo:'' };
 let logLoading = false;
 let alarmEntries = [];
 let activeFilters = new Set(['send','ack','status','connect','disconnect','timeout']);
@@ -549,16 +549,20 @@ function renderMultiCtrl() {
 
 async function sendMultiBulk(cmd) {
   const BULK_DELAY_MS = 80;
+  const devicePromises = [];
   for (const deviceId of multiSelected) {
     const dev = devices.find(d => d.deviceId === deviceId);
     if (!dev || dev.linkState !== 'ok') continue;
     [0,1,2,3].forEach(ch => setPending(deviceId, ch, cmd));
-    // renderCard는 setPending 내부에서 자동 호출됨
-    for (let ch = 0; ch < 4; ch++) {
-      await postControl(deviceId, ch, cmd);
-      await new Promise(r => setTimeout(r, BULK_DELAY_MS));
-    }
+    // 장치별로 병렬 실행 — 같은 장치의 채널 간 딜레이는 유지
+    devicePromises.push((async () => {
+      for (let ch = 0; ch < 4; ch++) {
+        await postControl(deviceId, ch, cmd);
+        if (ch < 3) await new Promise(r => setTimeout(r, BULK_DELAY_MS));
+      }
+    })());
   }
+  await Promise.all(devicePromises);
 }
 function renderCtrl() {
   const dev = devices.find(d=>d.deviceId===selectedId);
@@ -933,12 +937,13 @@ async function fetchLogs(page) {
   logPage = page || 1;
   try {
     const params = new URLSearchParams({ page: logPage, limit: 100 });
-    if (logFilters.deviceId) params.set('deviceId', logFilters.deviceId);
-    if (logFilters.dir)      params.set('dir',      logFilters.dir);
-    if (logFilters.user)     params.set('user',      logFilters.user);
-    if (logFilters.keyword)  params.set('keyword',  logFilters.keyword);
-    if (logFilters.dateFrom) params.set('dateFrom', logFilters.dateFrom);
-    if (logFilters.dateTo)   params.set('dateTo',   logFilters.dateTo);
+    if (logFilters.deviceId)     params.set('deviceId',     logFilters.deviceId);
+    if (logFilters.locationName) params.set('locationName', logFilters.locationName);
+    if (logFilters.dir)          params.set('dir',          logFilters.dir);
+    if (logFilters.user)         params.set('user',         logFilters.user);
+    if (logFilters.keyword)      params.set('keyword',      logFilters.keyword);
+    if (logFilters.dateFrom)     params.set('dateFrom',     logFilters.dateFrom);
+    if (logFilters.dateTo)       params.set('dateTo',       logFilters.dateTo);
     const res = await fetch('/api/logs?' + params.toString());
     if (res.status === 401) { doLogoutQuiet(); return; }
     const data = await res.json();
@@ -968,18 +973,19 @@ function initFilterStyles() {
 }
 
 function applyLogFilter() {
-  logFilters.deviceId = document.getElementById('lfDeviceId')?.value.trim() || '';
-  logFilters.dir      = document.getElementById('lfDir')?.value || '';
-  logFilters.user     = document.getElementById('lfUser')?.value.trim() || '';
-  logFilters.keyword  = document.getElementById('lfKeyword')?.value.trim() || '';
-  logFilters.dateFrom = document.getElementById('lfDateFrom')?.value || '';
-  logFilters.dateTo   = document.getElementById('lfDateTo')?.value || '';
+  logFilters.deviceId      = document.getElementById('lfDeviceId')?.value.trim() || '';
+  logFilters.locationName  = document.getElementById('lfLocationName')?.value.trim() || '';
+  logFilters.dir           = document.getElementById('lfDir')?.value || '';
+  logFilters.user          = document.getElementById('lfUser')?.value.trim() || '';
+  logFilters.keyword       = document.getElementById('lfKeyword')?.value.trim() || '';
+  logFilters.dateFrom      = document.getElementById('lfDateFrom')?.value || '';
+  logFilters.dateTo        = document.getElementById('lfDateTo')?.value || '';
   updateSelectStyle(document.getElementById('lfDir'));
   fetchLogs(1);
 }
 
 function resetLogFilter() {
-  ['lfDeviceId','lfDir','lfUser','lfKeyword','lfDateFrom','lfDateTo'].forEach(id => {
+  ['lfDeviceId','lfLocationName','lfDir','lfUser','lfKeyword','lfDateFrom','lfDateTo'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -989,7 +995,7 @@ function resetLogFilter() {
     if (el) el.value = '';
     updateDateLabel(inputId, labelId);
   });
-  logFilters = { deviceId:'', dir:'', user:'', keyword:'', dateFrom:'', dateTo:'' };
+  logFilters = { deviceId:'', locationName:'', dir:'', user:'', keyword:'', dateFrom:'', dateTo:'' };
   fetchLogs(1);
 }
 

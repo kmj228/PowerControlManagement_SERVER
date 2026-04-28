@@ -214,7 +214,7 @@
   .log-filter-bar input::placeholder{color:var(--text3);}
   .log-filter-bar select option[value=""]{color:var(--text3);}
   .log-filter-bar select.placeholder-active{color:var(--text3);}
-  .log-filter-date{width:148px;min-width:148px;}
+  .log-filter-date{width:172px;min-width:172px;}
   /* 날짜 선택 커스텀 라벨 */
   .ls-date-wrap{position:relative;display:inline-block;}
   .ls-date-wrap .log-filter-date{width:148px;}
@@ -920,6 +920,10 @@
             <input class="ls-input" id="lfDeviceId" placeholder="0023C7" onkeydown="if(event.key==='Enter')applyLogFilter()">
           </div>
           <div class="ls-filter-item">
+            <label class="ls-label">장비명</label>
+            <input class="ls-input" id="lfLocationName" placeholder="위치명 검색" onkeydown="if(event.key==='Enter')applyLogFilter()">
+          </div>
+          <div class="ls-filter-item">
             <label class="ls-label">유형</label>
             <select class="ls-input" id="lfDir">
               <option value="">전체</option>
@@ -942,17 +946,17 @@
         </div>
         <div class="ls-filter-row2">
           <div class="ls-filter-item">
-            <label class="ls-label">시작일</label>
+            <label class="ls-label">시작 일시</label>
             <div class="ls-date-wrap">
-              <input type="date" id="lfDateFrom" class="ls-input log-filter-date" onkeydown="if(event.key==='Enter')applyLogFilter()" onchange="updateDateLabel('lfDateFrom','lbDateFrom')" oninput="updateDateLabel('lfDateFrom','lbDateFrom')">
-              <span class="ls-date-label" id="lbDateFrom">시작일</span>
+              <input type="datetime-local" id="lfDateFrom" class="ls-input log-filter-date" onkeydown="if(event.key==='Enter')applyLogFilter()" onchange="updateDateLabel('lfDateFrom','lbDateFrom')" oninput="updateDateLabel('lfDateFrom','lbDateFrom')">
+              <span class="ls-date-label" id="lbDateFrom">시작 일시</span>
             </div>
           </div>
           <div class="ls-filter-item">
-            <label class="ls-label">종료일</label>
+            <label class="ls-label">종료 일시</label>
             <div class="ls-date-wrap">
-              <input type="date" id="lfDateTo" class="ls-input log-filter-date" onkeydown="if(event.key==='Enter')applyLogFilter()" onchange="updateDateLabel('lfDateTo','lbDateTo')" oninput="updateDateLabel('lfDateTo','lbDateTo')">
-              <span class="ls-date-label" id="lbDateTo">종료일</span>
+              <input type="datetime-local" id="lfDateTo" class="ls-input log-filter-date" onkeydown="if(event.key==='Enter')applyLogFilter()" onchange="updateDateLabel('lfDateTo','lbDateTo')" oninput="updateDateLabel('lfDateTo','lbDateTo')">
+              <span class="ls-date-label" id="lbDateTo">종료 일시</span>
             </div>
           </div>
           <div class="ls-filter-actions">

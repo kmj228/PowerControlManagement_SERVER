@@ -673,20 +673,22 @@ async function requestHandler(req, res) {
       const page     = Math.max(1, parseInt(qs.get('page') || '1'));
       const limit    = Math.min(200, Math.max(1, parseInt(qs.get('limit') || '100')));
       const offset   = (page - 1) * limit;
-      const deviceId = qs.get('deviceId') || '';
-      const dir      = qs.get('dir') || '';
-      const user     = qs.get('user') || '';
-      const keyword  = qs.get('keyword') || '';
-      const dateFrom = qs.get('dateFrom') || '';
-      const dateTo   = qs.get('dateTo') || '';
+      const deviceId     = qs.get('deviceId')     || '';
+      const locationName = qs.get('locationName') || '';
+      const dir          = qs.get('dir')          || '';
+      const user         = qs.get('user')         || '';
+      const keyword      = qs.get('keyword')      || '';
+      const dateFrom     = qs.get('dateFrom')     || '';
+      const dateTo       = qs.get('dateTo')       || '';
 
       const where = []; const params = [];
-      if (deviceId) { where.push('deviceId = ?'); params.push(deviceId); }
-      if (dir)      { where.push('dir = ?');      params.push(dir); }
-      if (user)     { where.push('user = ?');      params.push(user); }
-      if (keyword)  { where.push('(summary LIKE ? OR location LIKE ?)'); params.push('%'+keyword+'%','%'+keyword+'%'); }
-      if (dateFrom) { where.push('time >= ?'); params.push(dateFrom + ' 00:00:00'); }
-      if (dateTo)   { where.push('time <= ?'); params.push(dateTo   + ' 23:59:59'); }
+      if (deviceId)     { where.push('deviceId LIKE ?');  params.push('%'+deviceId+'%'); }
+      if (locationName) { where.push('location LIKE ?');  params.push('%'+locationName+'%'); }
+      if (dir)          { where.push('dir = ?');          params.push(dir); }
+      if (user)         { where.push('user = ?');         params.push(user); }
+      if (keyword)      { where.push('(summary LIKE ? OR location LIKE ?)'); params.push('%'+keyword+'%','%'+keyword+'%'); }
+      if (dateFrom)     { where.push('time >= ?'); params.push(dateFrom.replace('T', ' ')); }
+      if (dateTo)       { where.push('time <= ?'); params.push(dateTo.replace('T', ' ')); }
 
       const whereStr = where.length ? 'WHERE ' + where.join(' AND ') : '';
       const [[{ total }]] = await dbPool.execute('SELECT COUNT(*) as total FROM logs ' + whereStr, params);
@@ -713,19 +715,21 @@ async function requestHandler(req, res) {
     if (!dbPool) { res.writeHead(503); return res.end('DB 연결 없음'); }
     try {
       const qs = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
-      const deviceId = qs.get('deviceId') || '';
-      const dir      = qs.get('dir')      || '';
-      const user     = qs.get('user')     || '';
-      const keyword  = qs.get('keyword')  || '';
-      const dateFrom = qs.get('dateFrom') || '';
-      const dateTo   = qs.get('dateTo')   || '';
+      const deviceId     = qs.get('deviceId')     || '';
+      const locationName = qs.get('locationName') || '';
+      const dir          = qs.get('dir')          || '';
+      const user         = qs.get('user')         || '';
+      const keyword      = qs.get('keyword')      || '';
+      const dateFrom     = qs.get('dateFrom')     || '';
+      const dateTo       = qs.get('dateTo')       || '';
       const where = []; const params = [];
-      if (deviceId) { where.push('deviceId = ?'); params.push(deviceId); }
-      if (dir)      { where.push('dir = ?');      params.push(dir); }
-      if (user)     { where.push('user = ?');      params.push(user); }
-      if (keyword)  { where.push('(summary LIKE ? OR location LIKE ?)'); params.push('%'+keyword+'%','%'+keyword+'%'); }
-      if (dateFrom) { where.push('time >= ?'); params.push(dateFrom + ' 00:00:00'); }
-      if (dateTo)   { where.push('time <= ?'); params.push(dateTo   + ' 23:59:59'); }
+      if (deviceId)     { where.push('deviceId LIKE ?');  params.push('%'+deviceId+'%'); }
+      if (locationName) { where.push('location LIKE ?');  params.push('%'+locationName+'%'); }
+      if (dir)          { where.push('dir = ?');          params.push(dir); }
+      if (user)         { where.push('user = ?');         params.push(user); }
+      if (keyword)      { where.push('(summary LIKE ? OR location LIKE ?)'); params.push('%'+keyword+'%','%'+keyword+'%'); }
+      if (dateFrom)     { where.push('time >= ?'); params.push(dateFrom.replace('T', ' ')); }
+      if (dateTo)       { where.push('time <= ?'); params.push(dateTo.replace('T', ' ')); }
       const whereStr = where.length ? 'WHERE ' + where.join(' AND ') : '';
       const [rows] = await dbPool.execute(
         'SELECT DATE_FORMAT(time,"%Y-%m-%d %H:%i:%s") as time, deviceId, location, dir, cmdType, summary, user, raw FROM logs ' + whereStr + ' ORDER BY time DESC',
