@@ -584,11 +584,11 @@ async function requestHandler(req, res) {
     if (!requireAdmin(req, res)) return;
     let body = ''; req.on('data', c => body+=c);
     req.on('end', () => {
-      const { deviceId, ip, locationName, address } = JSON.parse(body);
+      const { deviceId, ip, locationName, address, group, channelNames } = JSON.parse(body);
       if (!deviceId) { res.writeHead(400); return res.end(JSON.stringify({error:'Device ID를 입력해 주세요.'})); }
       const devs = getDevices();
       if (devs.find(d => d.deviceId===deviceId.toUpperCase())) { res.writeHead(409); return res.end(JSON.stringify({error:'이미 존재하는 Device ID예요.'})); }
-      const newDev = { deviceId:deviceId.toUpperCase(), ip:ip||'', locationName:locationName||'', address:address||'', channels:[-1,-1,-1,-1], currents:[0,0,0,0], fwVer:'', lastUpdate:'', linkState:'never' };
+      const newDev = { deviceId:deviceId.toUpperCase(), ip:ip||'', locationName:locationName||'', address:address||'', group:group||null, channelNames:channelNames||['','','',''], channels:[-1,-1,-1,-1], currents:[0,0,0,0], fwVer:'', lastUpdate:'', linkState:'never' };
       devs.push(newDev);
       persistDevices();
       broadcastToWeb({ type:'DEVICE_ADDED', device: newDev });
@@ -646,6 +646,22 @@ async function requestHandler(req, res) {
     }
     broadcastToWeb({ type: 'DEVICE_DELETED', deviceId: id });
     res.writeHead(200,{'Content-Type':'application/json'}); return res.end(JSON.stringify({ok:true}));
+  }
+
+  // ── 그룹 순서 API
+  if (url === '/api/groups/order' && method === 'PUT') {
+    if (!requireAdmin(req, res)) return;
+    let body = ''; req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const { groupOrder } = JSON.parse(body);
+        if (!Array.isArray(groupOrder)) { res.writeHead(400); return res.end(JSON.stringify({error:'잘못된 요청이에요.'})); }
+        const cfg = loadConfig();
+        saveConfig({ ...cfg, groupOrder });
+        broadcastToWeb({ type:'GROUP_ORDER', groupOrder });
+        res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true}));
+      } catch(e) { res.writeHead(400); res.end(JSON.stringify({error:'잘못된 요청이에요.'})); }
+    }); return;
   }
 
   // ── Config API
@@ -1123,7 +1139,7 @@ httpServer.on('upgrade', (req, socket) => {
   socket._username = sess.username;
   wsClients.add(socket);
   const list = getDevices().map(d => ({ ...d, linkState: calcLinkState(d.lastUpdate) }));
-  socket.write(wsEncodeFrame(JSON.stringify({ type:'INIT', devices:list, tcpPort:TCP_PORT, username:sess.username, role:sess.role, dbConnected: !!dbPool, certHttpPort: CERT_HTTP_PORT || 0 })));
+  socket.write(wsEncodeFrame(JSON.stringify({ type:'INIT', devices:list, tcpPort:TCP_PORT, username:sess.username, role:sess.role, dbConnected: !!dbPool, certHttpPort: CERT_HTTP_PORT || 0, groupOrder: (loadConfig().groupOrder || []) })));
   let wsBuf = Buffer.alloc(0);
   socket.on('data', chunk => { wsBuf=Buffer.concat([wsBuf,chunk]); const m=wsDecodeFrame(wsBuf); if(m) wsBuf=Buffer.alloc(0); });
   socket.on('close', () => wsClients.delete(socket));

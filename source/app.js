@@ -11,7 +11,9 @@ let logPage    = 1;
 let logFilters = { deviceId:'', locationName:'', dir:'', user:'', keyword:'', dateFrom:'', dateTo:'' };
 let logLoading = false;
 let alarmEntries = [];
-let activeFilters = new Set(['send','ack','status','connect','disconnect','timeout']);
+let activeFilters = new Set(['send','status','connect','disconnect','timeout']);
+let groupOrder    = [];   // 그룹 표시 순서
+let groupCollapsed = {};  // 그룹 접기 상태 { groupName: boolean }
 const pendingChannels = new Map(); // deviceId → Map(chIndex → {target,cmd,timer})
 let currentUser = null; // { username, role }
 let dbConnected  = false; // DB 연결 상태
@@ -200,7 +202,7 @@ function connectWS() {
       return;
     }
     if (msg.type==='INIT') {
-      devices=msg.devices; renderList(); if(selectedId||multiSelected.size>0) renderCtrlPanel();
+      devices=msg.devices; if (msg.groupOrder) groupOrder = msg.groupOrder; renderList(); if(selectedId||multiSelected.size>0) renderCtrlPanel();
       if (msg.tcpPort) document.getElementById('tcpPort').value = msg.tcpPort;
       if (msg.username && !currentUser) { currentUser={username:msg.username,role:msg.role}; applyUserRole(); }
       if (msg.dbConnected !== undefined) { dbConnected = msg.dbConnected; updateDbUI(); }
@@ -211,6 +213,11 @@ function connectWS() {
     if (msg.type==='TCP_PORT_CHANGE') {
       const el = document.getElementById('tcpPort');
       if (el) el.value = msg.port;
+      return;
+    }
+    if (msg.type==='GROUP_ORDER') {
+      groupOrder = msg.groupOrder || [];
+      renderList();
       return;
     }
     if (msg.type==='DB_STATUS') {
@@ -408,11 +415,87 @@ function updateSummaryCards() {
 
 // ─── 장비 목록 ────────────────────────────
 function renderList() {
-  const c = document.getElementById('deviceList');
-  c.innerHTML = '';
-  if (!devices.length) { c.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">등록된 장비가 없어요.<br>추가 버튼으로 등록해 주세요.</div>`; return; }
-  devices.forEach(dev => c.appendChild(buildCard(dev)));
+  const list = document.getElementById('deviceList');
+  list.innerHTML = '';
   updateSummaryCards();
+  if (!devices.length) { list.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">등록된 장비가 없어요.<br>추가 버튼으로 등록해 주세요.</div>`; return; }
+
+  // 그룹별 분류
+  const grouped = {};
+  const ungrouped = [];
+  devices.forEach(d => {
+    if (d.group) {
+      if (!grouped[d.group]) grouped[d.group] = [];
+      grouped[d.group].push(d);
+    } else {
+      ungrouped.push(d);
+    }
+  });
+
+  // groupOrder에 없는 그룹은 뒤에 추가
+  const knownGroups = Object.keys(grouped);
+  const orderedGroups = [
+    ...groupOrder.filter(g => grouped[g]),
+    ...knownGroups.filter(g => !groupOrder.includes(g))
+  ];
+
+  orderedGroups.forEach(gname => {
+    const devs = grouped[gname];
+    const isCollapsed = !!groupCollapsed[gname];
+    const allSel = devs.every(d => multiSelected.has(d.deviceId));
+
+    const header = document.createElement('div');
+    header.className = 'group-header';
+    header.dataset.group = gname;
+    header.draggable = true;
+    header.innerHTML = `
+      <span class="group-drag-handle" title="드래그로 그룹 순서 변경">⠿</span>
+      <span class="group-toggle${isCollapsed?' collapsed':''}">▾</span>
+      <span class="group-name-lbl">${gname}</span>
+      <span class="group-count-badge">${devs.length}대</span>
+      <button class="group-select-btn${allSel?' all-sel':''}" onclick="event.stopPropagation();toggleGroupSelect('${gname}')">${allSel?'선택 해제':'전체 선택'}</button>`;
+    header.addEventListener('click', () => toggleGroupCollapse(gname));
+    list.appendChild(header);
+
+    const container = document.createElement('div');
+    container.className = 'group-devices' + (isCollapsed ? ' collapsed' : '');
+    container.dataset.groupContainer = gname;
+    devs.forEach(d => {
+      const card = buildCard(d);
+      card.draggable = true;
+      card.dataset.id = d.deviceId;
+      container.appendChild(card);
+    });
+    list.appendChild(container);
+  });
+
+  if (ungrouped.length > 0) {
+    const container = document.createElement('div');
+    container.className = 'ungrouped-devices';
+    ungrouped.forEach(d => {
+      const card = buildCard(d);
+      card.draggable = true;
+      card.dataset.id = d.deviceId;
+      container.appendChild(card);
+    });
+    list.appendChild(container);
+  }
+
+  // 선택 상태 복원
+  if (selectedId) {
+    const el = document.getElementById('card-' + selectedId);
+    if (el) el.classList.add('selected');
+  }
+  multiSelected.forEach(id => {
+    const el = document.getElementById('card-' + id);
+    if (el) el.classList.add('multi-selected');
+  });
+
+  // draggable 설정 (그룹 없는 카드들도)
+  document.querySelectorAll('.device-card').forEach(card => {
+    card.draggable = true;
+    if (!card.dataset.id) card.dataset.id = card.id.replace('card-', '');
+  });
 }
 function buildCard(dev) {
   const div = document.createElement('div');
@@ -450,6 +533,27 @@ function renderCard(dev) {
   // multi-selected 클래스 동기화
   el.classList.toggle('multi-selected', isMultiSel);
   el.innerHTML = cardHTML(dev);
+}
+
+function toggleGroupCollapse(gname) {
+  groupCollapsed[gname] = !groupCollapsed[gname];
+  const container = document.querySelector(`[data-group-container="${gname}"]`);
+  const toggle = document.querySelector(`.group-header[data-group="${gname}"] .group-toggle`);
+  if (container) container.classList.toggle('collapsed', groupCollapsed[gname]);
+  if (toggle) toggle.classList.toggle('collapsed', groupCollapsed[gname]);
+}
+
+function toggleGroupSelect(gname) {
+  const devs = devices.filter(d => d.group === gname);
+  const allSel = devs.every(d => multiSelected.has(d.deviceId));
+  if (allSel) {
+    devs.forEach(d => multiSelected.delete(d.deviceId));
+  } else {
+    devs.forEach(d => multiSelected.add(d.deviceId));
+  }
+  updateMultiCountBadge();
+  renderList();
+  renderCtrlPanel();
 }
 
 // ─── 제어 패널 ────────────────────────────
@@ -597,10 +701,12 @@ function renderCtrl() {
     const pend = pendMap.get(i);
     const bc = pend ? `${pend.target===1?'on':'off'} pending-blink` : chClass(v);
     const bt = pend ? (pend.target===1?'ON':'OFF') : chLabel(v);
+    const chAlias = dev.channelNames?.[i];
+    const chLabel2 = chAlias ? `${chAlias}<span class="ch-alias">(CH${i+1})</span>` : `CH${i+1}`;
     return `
     <div class="ch-row">
       <div class="ch-top">
-        <span class="ch-label">CH${i+1}</span>
+        <span class="ch-label">${chLabel2}</span>
         <span class="ch-status-badge ${bc}">${bt}</span>
         <div class="ch-btns">
           <button class="btn btn-on"  ${!canCtrl?'disabled':''} onclick="sendCmd('${dev.deviceId}',${i},'ON')">ON</button>
@@ -671,7 +777,18 @@ function entryMatchesFilter(entry) {
 // ─── 패킷 로그 ────────────────────────────
 function addPacketLog(dir, deviceId, cmdType, data) {
   const dev = devices.find(d=>d.deviceId===deviceId);
-  logEntries.unshift({ seq:++logSeq, time:shortTime(), dir, deviceId, cmdType, location:dev?.locationName||'', data });
+  // STATUS 로그: 직전 같은 장비의 STATUS가 있으면 시간만 업데이트
+  if (dir === 'status' && logEntries.length > 0) {
+    const last = logEntries[0];
+    if (last.dir === 'status' && last.deviceId === deviceId) {
+      last.timeEnd = shortTime();
+      last.data = data;
+      last.location = dev?.locationName || last.location;
+      renderLog();
+      return;
+    }
+  }
+  logEntries.unshift({ seq:++logSeq, time:shortTime(), timeEnd:null, dir, deviceId, cmdType, location:dev?.locationName||'', data });
   if (logEntries.length > 1000) logEntries.pop();
   renderLog();
 }
@@ -697,14 +814,19 @@ function renderLog() {
     const row=document.createElement('div');
     const rowBg = entry.dir==='connect' ? 'row-connect' : entry.dir==='disconnect' ? 'row-disconnect' : entry.dir==='timeout' ? 'row-timeout' : '';
     row.className='log-row' + (rowBg ? ' '+rowBg : '');
-    row.onclick=()=>openDetail(entry.seq);
+    if (currentUser?.role === 'admin') {
+      row.onclick = () => openDetail(entry.seq);
+      row.style.cursor = 'pointer';
+    } else {
+      row.style.cursor = 'default';
+    }
     row.innerHTML=`
-      <span class="log-time">${entry.time}</span>
+      <span class="log-time">${entry.timeEnd ? entry.time+'<br><span style="color:var(--text3)">~'+entry.timeEnd+'</span>' : entry.time}</span>
       <span class="log-name col-name">${entry.location||'-'}</span>
       <span class="log-devid col-id">${entry.deviceId}</span>
       <span><span class="log-type-pill ${tc.cls}">${tc.txt}</span></span>
       <span class="log-summary">${summaryText(entry)}</span>
-      <span class="log-dot">···</span>`;
+      <span class="log-dot">${currentUser?.role==='admin'?'···':''}</span>`;
     frag.appendChild(row);
   });
   body.querySelector('.log-col-header').after(frag);
@@ -742,8 +864,14 @@ function renderDetailEntry(entry) {
   ];
   if (entry.dir === 'send' && (entry.data?.user || d.user)) rows.push(['사용자', entry.data?.user || d.user]);
   if (entry.cmdType === 'STATUS') {
-    const chs = d.channels || [];
-    rows.push(['채널 상태', chs.map((v,i)=>`<span class="detail-ch ${v===1?'on':'off'}">CH${i+1} ${v===1?'ON':'OFF'}</span>`).join('')]);
+    let chs = d.channels || [];
+    if (!chs.length && entry._summary) {
+      // DB 로그: summary 파싱 "CH1:ON CH2:OFF CH3:ON CH4:OFF"
+      chs = (entry._summary.match(/CH\d+:(ON|OFF)/g) || []).map(s => s.endsWith('ON') ? 1 : 0);
+    }
+    if (chs.length) {
+      rows.push(['채널 상태', chs.map((v,i)=>`<span class="detail-ch ${v===1?'on':'off'}">CH${i+1} ${v===1?'ON':'OFF'}</span>`).join('')]);
+    }
   } else if (['ON','OFF','RESET'].includes(entry.cmdType)) {
     if (d.ch !== undefined) rows.push(['대상 채널', `CH${parseInt(d.ch)+1}`]);
     rows.push(['명령', entry.cmdType]);
@@ -821,7 +949,9 @@ function closeDetailModal() { document.getElementById('detailModal').classList.r
 function openAddModal() {
   modalMode='add';
   document.getElementById('modalTitle').textContent='장비 추가';
-  ['fDeviceId','fIp','fLocationName','fAddress'].forEach(id=>document.getElementById(id).value='');
+  ['fDeviceId','fIp','fLocationName','fAddress','fGroup','fCh0','fCh1','fCh2','fCh3'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value='';
+  });
   document.getElementById('modal').classList.add('show');
   document.getElementById('fLocationName').focus();
 }
@@ -835,6 +965,9 @@ function openEditModal() {
   document.getElementById('fDeviceId').value=dev.deviceId;
   document.getElementById('fIp').value=dev.ip||'';
   document.getElementById('fAddress').value=dev.address||'';
+  const fGroup = document.getElementById('fGroup'); if(fGroup) fGroup.value=dev.group||'';
+  const names = dev.channelNames||['','','',''];
+  [0,1,2,3].forEach(i => { const el=document.getElementById('fCh'+i); if(el) el.value=names[i]||''; });
   document.getElementById('modal').classList.add('show');
   document.getElementById('fLocationName').focus();
 }
@@ -845,16 +978,18 @@ async function submitModal() {
   const deviceId=document.getElementById('fDeviceId').value.trim().toUpperCase();
   const ip=document.getElementById('fIp').value.trim();
   const address=document.getElementById('fAddress').value.trim();
+  const group=(document.getElementById('fGroup')?.value||'').trim()||null;
+  const channelNames=[0,1,2,3].map(i=>(document.getElementById('fCh'+i)?.value||'').trim());
   if(!locationName) return showAlert('함체 위치명을 입력해 주세요.','warn');
   if(!deviceId||deviceId.length!==6) return showAlert('Device ID는 6자리 HEX를 입력해 주세요.','warn');
   if(modalMode==='add') {
-    const res=await fetch('/api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address})});
+    const res=await fetch('/api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address,group,channelNames})});
     const data=await res.json();
     if(!res.ok) return showAlert(data.error||'장비를 추가하지 못했어요.','error');
     // 로컬 push 없음 — DEVICE_ADDED WebSocket 메시지가 실제 추가를 처리해요.
     // (로컬에서 먼저 push하면 WS 메시지와 경쟁 조건이 생겨 2개씩 추가돼요)
   } else {
-    const res=await fetch(`/api/devices/${selectedId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address})});
+    const res=await fetch(`/api/devices/${selectedId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId,ip,locationName,address,group,channelNames})});
     const data=await res.json();
     if(!res.ok) return showAlert(data.error||'장비를 수정하지 못했어요.','error');
     const dev=devices.find(d=>d.deviceId===selectedId);
@@ -864,9 +999,17 @@ async function submitModal() {
         if(oldCard) oldCard.id=`card-${deviceId}`;
         dev.deviceId=deviceId; selectedId=deviceId;
       }
-      Object.assign(dev,{ip,locationName,address});
+      Object.assign(dev,{ip,locationName,address,group,channelNames});
     }
     renderList(); renderCtrl();
+  }
+  // 그룹이 새로 생겼으면 groupOrder에 추가
+  if (group && !groupOrder.includes(group)) {
+    groupOrder.push(group);
+    await fetch('/api/groups/order', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ groupOrder })
+    }).catch(()=>{});
   }
   closeModal();
 }
@@ -929,6 +1072,22 @@ init();
 // ─── 로그 검색 모달 ────────────────────────────────────────
 let dbLogEntries = []; // DB에서 조회한 로그 (검색 모달용)
 
+function collapseStatusLogs(entries) {
+  // DB는 DESC 순서 (최신이 앞) → 연속된 같은 장비 STATUS 병합
+  const result = [];
+  for (const e of entries) {
+    const last = result[result.length - 1];
+    if (e.dir === 'status' && last && last.dir === 'status' && last.deviceId === e.deviceId) {
+      // last.time = 최신, e.time = 더 오래된 것 → timeEnd로 처리
+      last.timeEnd = e.time; // 범위 끝 (더 오래된 시각)
+      last._count = (last._count || 1) + 1;
+    } else {
+      result.push({ ...e, timeEnd: null, _count: 1 });
+    }
+  }
+  return result;
+}
+
 function openLogSearch() {
   if (!dbConnected) {
     showAlert('DB가 연결돼 있지 않아요.\n설정 메뉴 > DB 설정에서 연결 정보를 입력해 주세요.', 'warn');
@@ -959,13 +1118,13 @@ async function fetchLogs(page) {
     if (res.status === 401) { doLogoutQuiet(); return; }
     const data = await res.json();
     logTotal = data.total || 0;
-    dbLogEntries = (data.rows || []).map((r, i) => ({
+    dbLogEntries = collapseStatusLogs((data.rows || []).map((r, i) => ({
       seq: logTotal - (logPage-1)*100 - i,
       time: r.time, deviceId: r.deviceId, location: r.location || '',
       dir: r.dir, cmdType: r.cmdType,
       data: { summary: r.summary, user: r.user, raw: r.raw || '' },
       _summary: r.summary, _user: r.user
-    }));
+    })));
     renderSearchLog();
     renderLogPager();
   } catch(e) { /* 로그 조회 실패 — 무시 */ }
@@ -1034,16 +1193,21 @@ function renderSearchLog() {
     const rowBg = entry.dir==='connect' ? 'row-connect' : entry.dir==='disconnect' ? 'row-disconnect' : entry.dir==='timeout' ? 'row-timeout' : '';
     const row = document.createElement('div');
     row.className = 'log-row' + (rowBg ? ' '+rowBg : '');
-    row.style.cursor = 'pointer';
     const entryRef = entry;
-    row.onclick = () => openDetailFromSearch(entryRef);
+    if (currentUser?.role === 'admin') {
+      row.onclick = () => openDetailFromSearch(entryRef);
+      row.style.cursor = 'pointer';
+    } else {
+      row.style.cursor = 'default';
+    }
+    // DB 로그는 DESC 순서라 time=최신, timeEnd=오래된 → 오래된~최신 방향으로 표시
     row.innerHTML = `
-      <span class="log-time">${entry.time}</span>
+      <span class="log-time">${entry.timeEnd ? entry.timeEnd+'<br><span style="color:var(--text3)">~'+entry.time+'</span>' : entry.time}</span>
       <span class="log-name col-name">${entry.location||'-'}</span>
       <span class="log-devid col-id">${entry.deviceId}</span>
       <span><span class="log-type-pill ${tc.cls}">${tc.txt}</span></span>
       <span class="log-summary">${summaryText(entry)}</span>
-      <span class="log-dot">···</span>`;
+      <span class="log-dot">${currentUser?.role==='admin'?'···':''}</span>`;
     frag.appendChild(row);
   });
   rows.appendChild(frag);
@@ -1083,65 +1247,100 @@ async function deleteAllLogs() {
 }
 
 // ─── 드래그 순서 변경 ─────────────────────────────────
-let dragSrcId = null;
-
 function enableDragReorder() {
   const list = document.getElementById('deviceList');
+  let dragSrcCard = null;
+  let dragSrcGroup = null;
+
   list.addEventListener('dragstart', e => {
     const card = e.target.closest('.device-card');
-    if (!card) return;
-    dragSrcId = card.dataset.id;
-    setTimeout(() => card.classList.add('dragging'), 0);
-    e.dataTransfer.effectAllowed = 'move';
+    const header = e.target.closest('.group-header');
+    if (card) {
+      dragSrcCard = card.dataset.id;
+      dragSrcGroup = null;
+      setTimeout(() => card.classList.add('dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    } else if (header) {
+      dragSrcGroup = header.dataset.group;
+      dragSrcCard = null;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => header.classList.add('dragging'), 0);
+    }
   });
+
   list.addEventListener('dragover', e => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    const card = e.target.closest('.device-card');
-    if (!card || card.dataset.id === dragSrcId) return;
     list.querySelectorAll('.device-card').forEach(c => c.classList.remove('drag-over'));
-    card.classList.add('drag-over');
+    list.querySelectorAll('.group-header').forEach(h => h.classList.remove('drag-over'));
+    if (dragSrcCard) {
+      const card = e.target.closest('.device-card');
+      if (card && card.dataset.id !== dragSrcCard) card.classList.add('drag-over');
+    } else if (dragSrcGroup) {
+      const header = e.target.closest('.group-header');
+      if (header && header.dataset.group !== dragSrcGroup) header.classList.add('drag-over');
+    }
   });
+
   list.addEventListener('dragleave', e => {
     if (!e.currentTarget.contains(e.relatedTarget)) {
       list.querySelectorAll('.device-card').forEach(c => c.classList.remove('drag-over'));
+      list.querySelectorAll('.group-header').forEach(h => h.classList.remove('drag-over'));
     }
   });
+
   list.addEventListener('drop', async e => {
     e.preventDefault();
-    const card = e.target.closest('.device-card');
-    list.querySelectorAll('.device-card').forEach(c => { c.classList.remove('drag-over'); c.classList.remove('dragging'); });
-    if (!card || !dragSrcId || card.dataset.id === dragSrcId) return;
-    const srcIdx = devices.findIndex(d => d.deviceId === dragSrcId);
-    const tgtIdx = devices.findIndex(d => d.deviceId === card.dataset.id);
-    if (srcIdx === -1 || tgtIdx === -1) return;
-    const [moved] = devices.splice(srcIdx, 1);
-    devices.splice(tgtIdx, 0, moved);
-    renderList();
-    if (selectedId) { const el = document.getElementById('card-' + selectedId); if (el) el.classList.add('selected'); }
-    multiSelected.forEach(id => { const el = document.getElementById('card-' + id); if (el) el.classList.add('multi-selected'); });
-    try {
-      await fetch('/api/devices/reorder', {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ order: devices.map(d => d.deviceId) })
-      });
-    } catch(e) {}
+    list.querySelectorAll('.device-card').forEach(c => { c.classList.remove('drag-over','dragging'); });
+    list.querySelectorAll('.group-header').forEach(h => { h.classList.remove('drag-over','dragging'); });
+
+    if (dragSrcCard) {
+      const card = e.target.closest('.device-card');
+      if (!card || card.dataset.id === dragSrcCard) return;
+      const srcIdx = devices.findIndex(d => d.deviceId === dragSrcCard);
+      const tgtIdx = devices.findIndex(d => d.deviceId === card.dataset.id);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      const [moved] = devices.splice(srcIdx, 1);
+      devices.splice(tgtIdx, 0, moved);
+      renderList();
+      try {
+        await fetch('/api/devices/reorder', {
+          method:'PUT', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ order: devices.map(d => d.deviceId) })
+        });
+      } catch(e) {}
+    } else if (dragSrcGroup) {
+      const header = e.target.closest('.group-header');
+      if (!header || header.dataset.group === dragSrcGroup) return;
+      const tgtGroup = header.dataset.group;
+
+      // groupOrder 업데이트
+      const knownGroups = [...new Set(devices.map(d => d.group).filter(Boolean))];
+      let order = [...groupOrder.filter(g => knownGroups.includes(g)), ...knownGroups.filter(g => !groupOrder.includes(g))];
+      const srcI = order.indexOf(dragSrcGroup);
+      const tgtI = order.indexOf(tgtGroup);
+      if (srcI !== -1 && tgtI !== -1) {
+        order.splice(srcI, 1);
+        order.splice(tgtI, 0, dragSrcGroup);
+        groupOrder = order;
+        renderList();
+        try {
+          await fetch('/api/groups/order', {
+            method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ groupOrder })
+          });
+        } catch(e) {}
+      }
+    }
   });
+
   list.addEventListener('dragend', () => {
-    list.querySelectorAll('.device-card').forEach(c => { c.classList.remove('dragging'); c.classList.remove('drag-over'); });
+    list.querySelectorAll('.device-card').forEach(c => { c.classList.remove('dragging','drag-over'); });
+    list.querySelectorAll('.group-header').forEach(h => { h.classList.remove('dragging','drag-over'); });
+    dragSrcCard = null;
+    dragSrcGroup = null;
   });
 }
-
-// buildCard에 draggable 및 data-id 주입 (renderList 이후 호출)
-const _origRenderList = renderList;
-renderList = function() {
-  _origRenderList();
-  document.querySelectorAll('.device-card').forEach(card => {
-    const id = card.id.replace('card-', '');
-    card.draggable = true;
-    card.dataset.id = id;
-  });
-};
 
 // 초기화 시 드래그 활성화
 document.addEventListener('DOMContentLoaded', enableDragReorder);

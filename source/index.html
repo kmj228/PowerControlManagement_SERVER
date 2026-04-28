@@ -485,6 +485,8 @@
   .device-card[draggable]{cursor:grab;}
   .device-card.dragging{opacity:.4;cursor:grabbing;}
   .device-card.drag-over{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-bg);transform:scale(1.01);}
+  .group-header.dragging{opacity:.4;}
+  .group-header.drag-over{background:var(--blue-bg);outline:2px solid var(--blue);outline-offset:-2px;border-radius:6px;}
   /* ── 패널 접기 ── */
   .btn-panel-toggle{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;margin-left:2px;}
   .btn-panel-toggle:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
@@ -694,6 +696,34 @@
   .multi-ctrl-ch-lbl{font-size:11px;font-weight:700;color:var(--text2);width:28px;flex-shrink:0;}
   .multi-ctrl-ch-btns{display:flex;gap:5px;flex:1;}
   .multi-ctrl-ch-btns .btn{flex:1;height:26px;padding:0;font-size:11px;}
+
+  /* ── 그룹 헤더 */
+  .group-header{
+    display:flex;align-items:center;gap:6px;
+    padding:6px 10px 4px;
+    cursor:pointer;user-select:none;
+    border-radius:6px;margin:4px 0 1px;
+  }
+  .group-header:hover{background:var(--bg3);}
+  .group-toggle{font-size:10px;color:var(--text3);width:14px;flex-shrink:0;transition:transform .15s;}
+  .group-toggle.collapsed{transform:rotate(-90deg);}
+  .group-name-lbl{font-size:12px;font-weight:700;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .group-count-badge{font-size:10px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1px 7px;flex-shrink:0;}
+  .group-select-btn{
+    font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--border2);
+    background:transparent;color:var(--text3);cursor:pointer;flex-shrink:0;
+    font-family:'Noto Sans KR',sans-serif;transition:all .12s;
+  }
+  .group-select-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .group-select-btn.all-sel{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+  .group-drag-handle{cursor:grab;color:var(--text3);font-size:13px;padding:0 2px;flex-shrink:0;}
+  .group-drag-handle:active{cursor:grabbing;}
+  .group-devices{display:flex;flex-direction:column;gap:4px;padding-left:16px;}
+  .group-devices.collapsed{display:none;}
+  .ungrouped-devices{display:flex;flex-direction:column;gap:4px;}
+  .group-drop-indicator{height:3px;background:var(--blue);border-radius:2px;margin:2px 0;display:none;}
+  .group-drop-indicator.show{display:block;}
+  .ch-alias{font-size:10px;color:var(--text3);margin-left:3px;font-weight:400;}
 </style>
 </head>
 <body>
@@ -860,8 +890,8 @@
           <span class="log-count" id="logCount">0</span>
           <div class="log-filters">
             <button class="log-filter-btn send   active" onclick="toggleFilter('send',this)">송신</button>
-            <button class="log-filter-btn ack    active" onclick="toggleFilter('ack',this)">ACK</button>
             <button class="log-filter-btn status active" onclick="toggleFilter('status',this)">상태</button>
+            <button class="log-filter-btn ack"          onclick="toggleFilter('ack',this)">ACK</button>
             <div class="log-filter-sep"></div>
             <button class="log-filter-btn conn   active" onclick="toggleFilter('connect',this)">연결</button>
             <button class="log-filter-btn disc   active" onclick="toggleFilter('disconnect',this)">해제</button>
@@ -893,12 +923,25 @@
       <input id="fDeviceId" placeholder="ID는 6자리예요" maxlength="6" style="font-family:'JetBrains Mono',monospace;">
     </div>
     <div class="form-row">
+      <label>그룹</label>
+      <input id="fGroup" placeholder="그룹명 (없으면 비워두세요)">
+    </div>
+    <div class="form-row">
       <label>IP 주소</label>
       <input id="fIp" placeholder="장비 IP 주소를 입력해 주세요">
     </div>
     <div class="form-row">
       <label>설치 주소</label>
       <input id="fAddress" placeholder="설치 위치를 입력해 주세요">
+    </div>
+    <div class="form-row">
+      <label>채널 별칭 <span class="form-hint" style="font-weight:400;font-size:11px;">— 비우면 CH1·CH2·CH3·CH4로 표시돼요</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;">
+        <input id="fCh0" placeholder="CH1 별칭">
+        <input id="fCh1" placeholder="CH2 별칭">
+        <input id="fCh2" placeholder="CH3 별칭">
+        <input id="fCh3" placeholder="CH4 별칭">
+      </div>
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
