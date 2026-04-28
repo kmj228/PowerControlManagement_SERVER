@@ -534,9 +534,9 @@ function renderMultiCtrl() {
 
   const listEl = document.getElementById('multiDeviceList');
   listEl.innerHTML = '';
-  multiSelected.forEach(id => {
-    const dev = devices.find(d => d.deviceId === id);
-    if (!dev) return;
+  // devices 배열 순서 기준으로 정렬해서 표시
+  devices.filter(d => multiSelected.has(d.deviceId)).forEach(dev => {
+    const id = dev.deviceId;
     const link = dev.linkState || 'never';
     const item = document.createElement('div');
     item.className = 'multi-device-item';
@@ -551,20 +551,29 @@ function renderMultiCtrl() {
 
 async function sendMultiBulk(cmd) {
   const BULK_DELAY_MS = 80;
-  const devicePromises = [];
-  for (const deviceId of multiSelected) {
-    const dev = devices.find(d => d.deviceId === deviceId);
-    if (!dev || dev.linkState !== 'ok') continue;
+  // devices 배열 순서 기준으로 연결된 장비만 추출
+  const orderedDevs = devices.filter(d => multiSelected.has(d.deviceId) && d.linkState === 'ok');
+  const devicePromises = orderedDevs.map(dev => {
+    const deviceId = dev.deviceId;
     [0,1,2,3].forEach(ch => setPending(deviceId, ch, cmd));
     // 장치별로 병렬 실행 — 같은 장치의 채널 간 딜레이는 유지
-    devicePromises.push((async () => {
+    return (async () => {
       for (let ch = 0; ch < 4; ch++) {
         await postControl(deviceId, ch, cmd);
         if (ch < 3) await new Promise(r => setTimeout(r, BULK_DELAY_MS));
       }
-    })());
-  }
+    })();
+  });
   await Promise.all(devicePromises);
+}
+
+async function sendMultiChBulk(ch, cmd) {
+  // 선택된 장비 중 연결된 장비에만 특정 채널 명령 병렬 전송
+  const orderedDevs = devices.filter(d => multiSelected.has(d.deviceId) && d.linkState === 'ok');
+  await Promise.all(orderedDevs.map(dev => {
+    setPending(dev.deviceId, ch, cmd);
+    return postControl(dev.deviceId, ch, cmd);
+  }));
 }
 function renderCtrl() {
   const dev = devices.find(d=>d.deviceId===selectedId);

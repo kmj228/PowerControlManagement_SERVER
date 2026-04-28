@@ -5,6 +5,4 @@ node_modules/
 data/
 devices.json
 
-# 빌드 결과물
-dist/*.exe
 /.claude

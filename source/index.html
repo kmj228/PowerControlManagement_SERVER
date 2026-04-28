@@ -572,6 +572,9 @@
   .cert-dl-btn{width:100%;padding:11px;background:var(--green);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;margin-bottom:8px;}
   .cert-dl-btn:hover{background:#15803d;}
   .cert-note{font-size:11px;color:var(--text3);text-align:center;line-height:1.6;}
+  .cert-wiz-steps{display:flex;flex-direction:column;gap:4px;margin-top:2px;}
+  .cert-wiz-steps div{display:flex;align-items:baseline;gap:6px;font-size:12px;line-height:1.5;}
+  .cert-wiz-n{color:var(--blue);font-weight:700;flex-shrink:0;}
   .cert-http-url-box{display:none;margin:0 0 10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;}
   .cert-http-url-label{font-size:11px;color:var(--text3);margin-bottom:5px;}
   .cert-http-url-row{display:flex;align-items:center;gap:8px;}
@@ -679,12 +682,18 @@
   }
   .multi-device-del:hover{color:var(--red);background:var(--red-bg);}
   .multi-ctrl-bulk{
-    flex-shrink:0;padding:12px;border-top:1px solid var(--border2);
-    display:flex;flex-direction:column;gap:8px;
+    flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border2);
+    display:flex;flex-direction:column;gap:6px;
+    overflow-y:auto;max-height:55%;
   }
-  .multi-ctrl-bulk-label{font-size:11px;font-weight:600;color:var(--text3);}
+  .multi-ctrl-bulk-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.3px;}
   .multi-ctrl-bulk-btns{display:flex;gap:6px;}
   .multi-ctrl-bulk-btns .btn-bulk{flex:1;}
+  .multi-ctrl-ch-divider{height:1px;background:var(--border2);margin:2px 0;}
+  .multi-ctrl-ch-row{display:flex;align-items:center;gap:8px;}
+  .multi-ctrl-ch-lbl{font-size:11px;font-weight:700;color:var(--text2);width:28px;flex-shrink:0;}
+  .multi-ctrl-ch-btns{display:flex;gap:5px;flex:1;}
+  .multi-ctrl-ch-btns .btn{flex:1;height:26px;padding:0;font-size:11px;}
 </style>
 </head>
 <body>
@@ -769,11 +778,44 @@
           </div>
           <div class="multi-device-list" id="multiDeviceList"></div>
           <div class="multi-ctrl-bulk">
-            <div class="multi-ctrl-bulk-label">선택된 장비 — 전체 채널</div>
+            <div class="multi-ctrl-bulk-label">전체 채널</div>
             <div class="multi-ctrl-bulk-btns">
               <button class="btn-bulk btn-bulk-on"  onclick="sendMultiBulk('ON')">ON</button>
               <button class="btn-bulk btn-bulk-off" onclick="sendMultiBulk('OFF')">OFF</button>
               <button class="btn-bulk btn-bulk-rst" onclick="sendMultiBulk('RESET')">RESET</button>
+            </div>
+            <div class="multi-ctrl-ch-divider"></div>
+            <div class="multi-ctrl-ch-row">
+              <span class="multi-ctrl-ch-lbl">CH 1</span>
+              <div class="multi-ctrl-ch-btns">
+                <button class="btn btn-on"  onclick="sendMultiChBulk(0,'ON')">ON</button>
+                <button class="btn btn-off" onclick="sendMultiChBulk(0,'OFF')">OFF</button>
+                <button class="btn btn-rst" onclick="sendMultiChBulk(0,'RESET')">RST</button>
+              </div>
+            </div>
+            <div class="multi-ctrl-ch-row">
+              <span class="multi-ctrl-ch-lbl">CH 2</span>
+              <div class="multi-ctrl-ch-btns">
+                <button class="btn btn-on"  onclick="sendMultiChBulk(1,'ON')">ON</button>
+                <button class="btn btn-off" onclick="sendMultiChBulk(1,'OFF')">OFF</button>
+                <button class="btn btn-rst" onclick="sendMultiChBulk(1,'RESET')">RST</button>
+              </div>
+            </div>
+            <div class="multi-ctrl-ch-row">
+              <span class="multi-ctrl-ch-lbl">CH 3</span>
+              <div class="multi-ctrl-ch-btns">
+                <button class="btn btn-on"  onclick="sendMultiChBulk(2,'ON')">ON</button>
+                <button class="btn btn-off" onclick="sendMultiChBulk(2,'OFF')">OFF</button>
+                <button class="btn btn-rst" onclick="sendMultiChBulk(2,'RESET')">RST</button>
+              </div>
+            </div>
+            <div class="multi-ctrl-ch-row">
+              <span class="multi-ctrl-ch-lbl">CH 4</span>
+              <div class="multi-ctrl-ch-btns">
+                <button class="btn btn-on"  onclick="sendMultiChBulk(3,'ON')">ON</button>
+                <button class="btn btn-off" onclick="sendMultiChBulk(3,'OFF')">OFF</button>
+                <button class="btn btn-rst" onclick="sendMultiChBulk(3,'RESET')">RST</button>
+              </div>
             </div>
           </div>
         </div>
@@ -890,12 +932,13 @@
       <div class="cert-step"><div class="cert-step-num">1</div><div class="cert-step-text">아래 버튼으로 인증서 파일을 받아 주세요.</div></div>
       <div class="cert-step"><div class="cert-step-num">2</div><div class="cert-step-text">받은 <code>DeviceManager-CA.crt</code> 파일을 <b>더블클릭</b>해 주세요.</div></div>
       <div class="cert-step"><div class="cert-step-num">3</div><div class="cert-step-text">
-        <b>인증서 설치</b> →
-        <b>로컬 컴퓨터</b> →
-        <b>모든 인증서를 다음 저장소에 저장</b> →
-        <b>찾아보기</b> →<br>
-        <b>신뢰할 수 있는 루트 인증 기관</b> 선택 →
-        <b>확인</b> → <b>다음</b> → <b>마침</b>
+        <div class="cert-wiz-steps">
+          <div><span class="cert-wiz-n">①</span> <b>인증서 설치</b></div>
+          <div><span class="cert-wiz-n">②</span> <b>로컬 컴퓨터</b></div>
+          <div><span class="cert-wiz-n">③</span> <b>모든 인증서를 다음 저장소에 저장</b> → <b>찾아보기</b></div>
+          <div><span class="cert-wiz-n">④</span> <b>신뢰할 수 있는 루트 인증 기관</b> 선택</div>
+          <div><span class="cert-wiz-n">⑤</span> <b>확인</b> → <b>다음</b> → <b>마침</b></div>
+        </div>
       </div></div>
       <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 닫았다가</b> 다시 열고 연결해 주세요.</div></div>
     </div>
