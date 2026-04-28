@@ -463,7 +463,7 @@ async function requestHandler(req, res) {
     let body = ''; req.on('data', c => body += c);
     req.on('end', async () => {
       try {
-        const { username, password } = JSON.parse(body);
+        const { username, password, force } = JSON.parse(body);
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
         const clientIp = ip.replace('::ffff:', '');
         const users = loadUsers();
@@ -493,11 +493,16 @@ async function requestHandler(req, res) {
           res.writeHead(401,{'Content-Type':'application/json'});
           return res.end(JSON.stringify({error:'아이디 또는 비밀번호가 올바르지 않아요.'}));
         }
-        // 중복 로그인 방지: 기존 세션 만료
+        // 중복 로그인 방지: 기존 세션 확인
+        const hasExisting = [...sessions.values()].some(s => s.username === username);
+        if (hasExisting && !force) {
+          res.writeHead(409, {'Content-Type':'application/json'});
+          return res.end(JSON.stringify({ alreadyLoggedIn: true }));
+        }
+        // 기존 세션 만료
         for (const [token, s] of sessions.entries()) {
           if (s.username === username) {
             sessions.delete(token);
-            // 기존 접속자에게 강제 로그아웃 신호
             broadcastToUser(username, { type:'FORCE_LOGOUT', reason:'다른 곳에서 로그인해서 연결이 끊겼어요.' });
           }
         }

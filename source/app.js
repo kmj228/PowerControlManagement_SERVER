@@ -337,9 +337,14 @@ function shortTime() {
 }
 
 // ─── 멀티탭 SVG ───────────────────────────
-function multitapSVG(channels, linkState, pendMap) {
+function multitapSVG(channels, linkState, pendMap, channelNames) {
   const chs = channels || [-1,-1,-1,-1];
   const connected = linkState === 'ok';
+  const svgLabel = (i) => {
+    const alias = channelNames?.[i];
+    if (!alias) return `CH${i+1}`;
+    return alias.length > 8 ? alias.slice(0, 7) + '…' : alias;
+  };
 
   // 전원 스위치
   const swGlow  = connected ? '<rect x="8" y="7" width="40" height="54" rx="5" fill="#dc2626" opacity=".18"/>' : '';
@@ -364,7 +369,7 @@ function multitapSVG(channels, linkState, pendMap) {
       return `
         <circle cx="${cx}" cy="${cy}" r="14" fill="#1a1e2a" stroke="#4b5563" stroke-width="1.2" stroke-dasharray="3 2.5"/>
         <text x="${cx}" y="${cy+4}" fill="#4b5563" font-size="11" text-anchor="middle" font-weight="600">?</text>
-        <text x="${cx}" y="${cy+22}" fill="#4b5563" font-size="7" text-anchor="middle" font-family="monospace">CH${i+1}</text>`;
+        <text x="${cx}" y="${cy+22}" fill="#4b5563" font-size="7" text-anchor="middle" font-family="monospace">${svgLabel(i)}</text>`;
     }
     const pend = pendMap ? pendMap.get(i) : null;
     if (pend) {
@@ -377,7 +382,7 @@ function multitapSVG(channels, linkState, pendMap) {
         <circle cx="${cx-5}" cy="${cy-1}" r="2.8" fill="#2d3748"/>
         <circle cx="${cx+5}" cy="${cy-1}" r="2.8" fill="#2d3748"/>
         <rect x="${cx-1.5}" y="${cy+6}" width="3" height="6" rx="1" fill="#2d3748"/>
-        <text x="${cx}" y="${cy+26}" fill="${sc}" font-size="7.5" text-anchor="middle" font-family="monospace">CH${i+1}</text>
+        <text x="${cx}" y="${cy+26}" fill="${sc}" font-size="7.5" text-anchor="middle" font-family="monospace">${svgLabel(i)}</text>
       </g>`;
     }
     const on = v === 1;
@@ -388,7 +393,7 @@ function multitapSVG(channels, linkState, pendMap) {
       <circle cx="${cx-5}" cy="${cy-1}" r="2.8" fill="${on ? '#2d3748' : '#0f172a'}"/>
       <circle cx="${cx+5}" cy="${cy-1}" r="2.8" fill="${on ? '#2d3748' : '#0f172a'}"/>
       <rect x="${cx-1.5}" y="${cy+6}" width="3" height="6" rx="1" fill="${on ? '#2d3748' : '#0f172a'}"/>
-      <text x="${cx}" y="${cy+26}" fill="${sc}" font-size="7.5" text-anchor="middle" font-family="monospace">CH${i+1}</text>`;
+      <text x="${cx}" y="${cy+26}" fill="${sc}" font-size="7.5" text-anchor="middle" font-family="monospace">${svgLabel(i)}</text>`;
   }).join('');
 
   return `<svg viewBox="0 0 440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMid meet">
@@ -403,8 +408,9 @@ function multitapSVG(channels, linkState, pendMap) {
 function updateSummaryCards() {
   const total = devices.length;
   const connected = devices.filter(d => d.linkState === 'ok').length;
-  // 펜딩 상태를 낙관적으로 반영 (pending 명령이 있으면 해당 채널의 목표 상태를 사용)
+  // 연결된 장비만 채널 카운트 + 펜딩 상태 낙관적 반영
   const onChannels = devices.reduce((sum, d) => {
+    if (d.linkState !== 'ok') return sum; // 연결 끊긴 장비 제외
     const channels = d.channels || [];
     const pendMap  = pendingChannels.get(d.deviceId);
     let count = 0;
@@ -531,7 +537,7 @@ function cardHTML(dev) {
         <div class="card-meta">${fmtTime(dev.lastUpdate)}</div>
       </div>
       <div class="card-right">
-        <div class="card-multitap">${multitapSVG(dev.channels, dev.linkState, pendingChannels.get(dev.deviceId))}</div>
+        <div class="card-multitap">${multitapSVG(dev.channels, dev.linkState, pendingChannels.get(dev.deviceId), dev.channelNames)}</div>
       </div>
     </div>`;
 }
@@ -711,7 +717,9 @@ function renderCtrl() {
     const bc = pend ? `${pend.target===1?'on':'off'} pending-blink` : chClass(v);
     const bt = pend ? (pend.target===1?'ON':'OFF') : chLabel(v);
     const chAlias = dev.channelNames?.[i];
-    const chLabel2 = chAlias ? `${chAlias}<span class="ch-alias">(CH${i+1})</span>` : `CH${i+1}`;
+    const chLabel2 = chAlias
+      ? `<span class="ch-alias-name">${chAlias}</span><span class="ch-alias">(CH${i+1})</span>`
+      : `CH${i+1}`;
     return `
     <div class="ch-row">
       <div class="ch-top">
@@ -1416,7 +1424,7 @@ function hideLoginOverlay() {
   document.getElementById('loginOverlay').classList.add('hidden');
 }
 
-async function doLogin() {
+async function doLogin(force = false) {
   const username = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginErr');
@@ -1425,8 +1433,13 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = '로그인 중...';
   errEl.textContent = '';
   try {
-    const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
+    const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password, force}) });
     const data = await res.json();
+    if (res.status === 409 && data.alreadyLoggedIn) {
+      btn.disabled = false; btn.textContent = '로그인';
+      showConfirm(`'${username}' 계정이 다른 곳에서 로그인 중이에요.\n로그인하면 기존 접속은 자동으로 로그아웃돼요.\n계속할까요?`, () => doLogin(true));
+      return;
+    }
     if (!res.ok) { errEl.textContent = data.error || '로그인하지 못했어요.'; btn.disabled=false; btn.textContent='로그인'; return; }
     currentUser = { username: data.username, role: data.role };
     applyUserRole();
@@ -1782,13 +1795,26 @@ async function saveDbConfig() {
 }
 
 // ─── 백업 / 복원 ──────────────────────────────────────
-function downloadBackup() {
-  const a = document.createElement('a');
-  a.href = '/api/backup';
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+async function downloadBackup() {
+  try {
+    const res = await fetch('/api/backup');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return showAlert(data.error || '백업 파일을 만들지 못했어요.', 'error');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `backup_${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    showAlert('백업 파일을 내려받지 못했어요.', 'error');
+  }
 }
 
 function triggerRestoreFile() {
