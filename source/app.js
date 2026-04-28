@@ -172,12 +172,14 @@ function setPending(deviceId, ch, cmd) {
     if (pendingChannels.get(deviceId).size === 0) pendingChannels.delete(deviceId);
     const chName = typeof ch === 'string' ? ch : `CH${parseInt(ch)+1}`;
     addAlarm('timeout', deviceId, `${chName} ${cmd} 명령 — 30초 이내 응답이 없어요. 전송이 제대로 안 된 것 같아요.`);
+    updateSummaryCards(); // 펜딩 만료 후 summary 재계산
     if (selectedId === deviceId) renderCtrlPanel();
   }, 30000);
   devMap.set(ch, { target, cmd, timer });
-  // 카드 즉시 업데이트
+  // 카드 및 summary 즉시 업데이트
   const dev = devices.find(d => d.deviceId === deviceId);
   if (dev) renderCard(dev);
+  updateSummaryCards();
 }
 
 function connectWS() {
@@ -401,9 +403,16 @@ function multitapSVG(channels, linkState, pendMap) {
 function updateSummaryCards() {
   const total = devices.length;
   const connected = devices.filter(d => d.linkState === 'ok').length;
+  // 펜딩 상태를 낙관적으로 반영 (pending 명령이 있으면 해당 채널의 목표 상태를 사용)
   const onChannels = devices.reduce((sum, d) => {
-    if (!d.channels) return sum;
-    return sum + d.channels.filter(v => v === 1).length;
+    const channels = d.channels || [];
+    const pendMap  = pendingChannels.get(d.deviceId);
+    let count = 0;
+    for (let i = 0; i < 4; i++) {
+      const pend = pendMap?.get(i);
+      count += pend ? (pend.target === 1 ? 1 : 0) : (channels[i] === 1 ? 1 : 0);
+    }
+    return sum + count;
   }, 0);
   const elTotal = document.getElementById('summaryTotal');
   const elConn  = document.getElementById('summaryConnected');
