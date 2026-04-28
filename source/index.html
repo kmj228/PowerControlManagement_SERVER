@@ -572,6 +572,11 @@
   .cert-dl-btn{width:100%;padding:11px;background:var(--green);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:background .12s;margin-bottom:8px;}
   .cert-dl-btn:hover{background:#15803d;}
   .cert-note{font-size:11px;color:var(--text3);text-align:center;line-height:1.6;}
+  .cert-http-url-box{display:none;margin:0 0 10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;}
+  .cert-http-url-label{font-size:11px;color:var(--text3);margin-bottom:5px;}
+  .cert-http-url-row{display:flex;align-items:center;gap:8px;}
+  .cert-http-url-text{flex:1;font-size:12px;color:var(--blue);font-family:'JetBrains Mono',monospace;word-break:break-all;user-select:all;}
+  .cert-http-url-hint{font-size:11px;color:var(--text3);margin-top:5px;}
 
   /* ── 온보딩 가이드 모달 */
   .onboarding-modal{width:480px;max-width:calc(100vw - 24px);}
@@ -895,6 +900,14 @@
       <div class="cert-step"><div class="cert-step-num">4</div><div class="cert-step-text">브라우저를 <b>완전히 닫았다가</b> 다시 열고 연결해 주세요.</div></div>
     </div>
     <button class="cert-dl-btn" onclick="downloadCert()">⬇ 인증서 다운로드 (DeviceManager-CA.crt)</button>
+    <div class="cert-http-url-box" id="certHttpUrlBox">
+      <div class="cert-http-url-label">🔗 아직 HTTPS에 접속이 안 된다면 아래 주소로 직접 받아 주세요 (새 탭에 붙여넣기)</div>
+      <div class="cert-http-url-row">
+        <span class="cert-http-url-text" id="certHttpUrlText"></span>
+        <button id="certCopyBtn" onclick="copyCertUrl()" style="white-space:nowrap;flex-shrink:0;padding:4px 12px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:11px;font-family:inherit;">복사</button>
+      </div>
+      <div class="cert-http-url-hint">이 주소는 인증서 설치용 HTTP 임시 서버예요. 인증서 설치 후에는 HTTPS 주소로 접속하세요.</div>
+    </div>
     <div class="cert-note">Firefox 사용자는 브라우저 설정 → 인증서 보기 → 인증 기관 → 가져오기에서 별도로 설치해 주세요.</div>
     <div class="modal-btns" style="margin-top:16px;">
       <button class="btn-cancel" onclick="document.getElementById('certModal').classList.remove('show')">닫기</button>

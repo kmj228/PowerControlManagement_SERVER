@@ -919,6 +919,7 @@ async function requestHandler(req, res) {
 // ──────────────────────────────────────────
 let httpServer;
 let isHttps = false;
+let CERT_HTTP_PORT = 0; // HTTPS 모드일 때 인증서 전용 HTTP 서버 포트
 
 // ── ASN.1 DER 인코딩 헬퍼 (순수 Node.js 인증서 생성용)
 function asn1Len(len) {
@@ -1122,12 +1123,45 @@ httpServer.on('upgrade', (req, socket) => {
   socket._username = sess.username;
   wsClients.add(socket);
   const list = getDevices().map(d => ({ ...d, linkState: calcLinkState(d.lastUpdate) }));
-  socket.write(wsEncodeFrame(JSON.stringify({ type:'INIT', devices:list, tcpPort:TCP_PORT, username:sess.username, role:sess.role, dbConnected: !!dbPool })));
+  socket.write(wsEncodeFrame(JSON.stringify({ type:'INIT', devices:list, tcpPort:TCP_PORT, username:sess.username, role:sess.role, dbConnected: !!dbPool, certHttpPort: CERT_HTTP_PORT || 0 })));
   let wsBuf = Buffer.alloc(0);
   socket.on('data', chunk => { wsBuf=Buffer.concat([wsBuf,chunk]); const m=wsDecodeFrame(wsBuf); if(m) wsBuf=Buffer.alloc(0); });
   socket.on('close', () => wsClients.delete(socket));
   socket.on('error', () => wsClients.delete(socket));
 });
+
+// HTTPS 모드일 때 인증서 전용 HTTP 서버 (인증서 설치 전에도 받을 수 있도록)
+function startCertHttpServer(port) {
+  CERT_HTTP_PORT = port;
+  const srv = http.createServer((req, res) => {
+    if (req.url === '/cert' && req.method === 'GET') {
+      try {
+        const certData = fs.readFileSync(CERT_FILE);
+        res.writeHead(200, {
+          'Content-Type': 'application/x-x509-ca-cert',
+          'Content-Disposition': 'attachment; filename="DeviceManager-CA.crt"',
+          'Access-Control-Allow-Origin': '*'
+        });
+        return res.end(certData);
+      } catch(e) {
+        res.writeHead(404); return res.end('cert not found');
+      }
+    }
+    // 나머지 요청은 HTTPS 메인 서버로 리다이렉트
+    const mainPort = port - 1;
+    const host = (req.headers.host || ('localhost:' + mainPort)).replace(':' + port, ':' + mainPort);
+    res.writeHead(301, { Location: 'https://' + host + (req.url || '/') });
+    res.end();
+  });
+  srv.on('error', (e) => { console.error('[인증서 HTTP] 오류:', e.message); CERT_HTTP_PORT = 0; });
+  srv.listen(port, () => {
+    console.log('[인증서] HTTPS 접속 전 인증서 다운로드 주소:');
+    const nets = getNetworkList();
+    nets.forEach(({ label, ip }) => { console.log(`         http://${ip}:${port}/cert  (${label})`); });
+    if (!nets.length) console.log(`         http://localhost:${port}/cert`);
+    console.log('');
+  });
+}
 
 function startHttpServer(port) {
   httpServer.listen(port);
@@ -1174,8 +1208,10 @@ process.on('SIGTERM', () => onProcessExit('SIGTERM'));
 initDB().then(() => {
   startTCPServer(TCP_PORT);
   startHttpServer(HTTP_PORT_DEFAULT);
+  if (isHttps) startCertHttpServer(HTTP_PORT_DEFAULT + 1);
   appendServerLog('start', '서버 시작');
 }).catch(() => {
   startTCPServer(TCP_PORT);
   startHttpServer(HTTP_PORT_DEFAULT);
+  if (isHttps) startCertHttpServer(HTTP_PORT_DEFAULT + 1);
 });

@@ -15,6 +15,7 @@ let activeFilters = new Set(['send','ack','status','connect','disconnect','timeo
 const pendingChannels = new Map(); // deviceId → Map(chIndex → {target,cmd,timer})
 let currentUser = null; // { username, role }
 let dbConnected  = false; // DB 연결 상태
+let certHttpPort = 0;    // 인증서 전용 HTTP 서버 포트 (HTTPS 모드일 때)
 
 const LINK_LABEL = { ok:'연결됨', timeout:'타임아웃', disconnected:'연결 끊김', never:'미연결' };
 
@@ -203,6 +204,7 @@ function connectWS() {
       if (msg.tcpPort) document.getElementById('tcpPort').value = msg.tcpPort;
       if (msg.username && !currentUser) { currentUser={username:msg.username,role:msg.role}; applyUserRole(); }
       if (msg.dbConnected !== undefined) { dbConnected = msg.dbConnected; updateDbUI(); }
+      if (msg.certHttpPort) { certHttpPort = msg.certHttpPort; updateCertHttpBox(); }
       checkAndShowOnboarding();
       return;
     }
@@ -1426,14 +1428,55 @@ function checkAndShowOnboarding() {
 }
 
 // ─── 인증서 다운로드 ──────────────────────────────────
-function downloadCert() {
-  const a = document.createElement('a');
-  a.href = '/api/cert/download';
-  a.download = 'DeviceManager-CA.crt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  localStorage.setItem('cert_installed', '1');
+async function downloadCert() {
+  try {
+    const res = await fetch('/api/cert/download', { credentials: 'same-origin' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || '인증서 파일을 찾을 수 없어요.');
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'DeviceManager-CA.crt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    localStorage.setItem('cert_installed', '1');
+  } catch(e) {
+    // fetch 실패 시 HTTP URL 안내 (브라우저 보안 정책으로 차단된 경우)
+    if (certHttpPort) {
+      const httpUrl = 'http://' + location.hostname + ':' + certHttpPort + '/cert';
+      alert('HTTPS 다운로드가 차단됐어요.\n아래 주소를 새 탭에 붙여넣어 인증서를 받아 주세요:\n\n' + httpUrl);
+    } else {
+      alert('다운로드에 실패했어요: ' + e.message);
+    }
+  }
+}
+
+function updateCertHttpBox() {
+  const box = document.getElementById('certHttpUrlBox');
+  const el  = document.getElementById('certHttpUrlText');
+  if (!box || !el) return;
+  if (certHttpPort) {
+    const url = 'http://' + location.hostname + ':' + certHttpPort + '/cert';
+    el.textContent = url;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function copyCertUrl() {
+  if (!certHttpPort) return;
+  const url = 'http://' + location.hostname + ':' + certHttpPort + '/cert';
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('certCopyBtn');
+    if (btn) { btn.textContent = '복사됨!'; setTimeout(() => { btn.textContent = '복사'; }, 2000); }
+  }).catch(() => { prompt('아래 URL을 복사하세요:', url); });
 }
 
 // ─── DB 상태 UI ───────────────────────────────────────
